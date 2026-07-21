@@ -28,6 +28,7 @@ export default {
     $.cast_expression,
     $.exists_expression,
     $.interval_expression,
+    $.typed_string_expression,
     $.array_expression,
     $.struct_expression,
     $.subquery_expression,
@@ -172,6 +173,11 @@ export default {
     choice($.single_quoted_string, $.escaped_string, $.dollar_quoted_string),
     optional($.identifier),
   )),
+
+  typed_string_expression: $ => seq(
+    choice($.keyword_date, $.keyword_time, $.keyword_timestamp),
+    $.single_quoted_string,
+  ),
 
   unary_expression: $ => choice(
     prec.right(PREC.UNARY, seq(

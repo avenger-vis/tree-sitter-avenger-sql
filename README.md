@@ -59,7 +59,7 @@ npm run test:scanner
 npm run check-generated
 npm run build:wasm
 npm run measure -- --check
-cargo test --release
+cargo test --locked --release
 ```
 
 To check the synchronized compiler-owned conformance manifest against a local

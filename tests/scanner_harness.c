@@ -173,16 +173,37 @@ int main(void) {
   assert(payload == NULL);
   assert(tree_sitter_avenger_sql_external_scanner_serialize(
              payload, serialization) == 0);
-  tree_sitter_avenger_sql_external_scanner_deserialize(payload, serialization,
-                                                       0);
+  for (unsigned length = 0; length <= TREE_SITTER_SERIALIZATION_BUFFER_SIZE;
+       length++) {
+    tree_sitter_avenger_sql_external_scanner_deserialize(payload, serialization,
+                                                         length);
+    assert(tree_sitter_avenger_sql_external_scanner_serialize(
+               payload, serialization) == 0);
+  }
 
+  expect_scan("-", LINE_COMMENT, false);
+  expect_scan("--", LINE_COMMENT, false);
+  expect_scan("-- ", LINE_COMMENT, true);
   expect_scan("-- comment\n", LINE_COMMENT, true);
   expect_scan("--\xc2\xa0" "comment\n", LINE_COMMENT, true);
+  expect_scan("-- comment\r\n", LINE_COMMENT, true);
+  expect_scan("--\rcomment", LINE_COMMENT, true);
   expect_scan("--comment", LINE_COMMENT, false);
-  expect_scan("--", LINE_COMMENT, false);
+  expect_scan("/", BLOCK_COMMENT, false);
+  expect_scan("/*", BLOCK_COMMENT, false);
+  expect_scan("/**", BLOCK_COMMENT, false);
+  expect_scan("/**/", BLOCK_COMMENT, true);
   expect_scan("/* outer /* inner */ outer */", BLOCK_COMMENT, true);
   expect_scan("/* unterminated", BLOCK_COMMENT, false);
+  expect_scan("$", DOLLAR_QUOTED_STRING, false);
+  expect_scan("$$", DOLLAR_QUOTED_STRING, false);
+  expect_scan("$$x", DOLLAR_QUOTED_STRING, false);
   expect_scan("$$raw$$", DOLLAR_QUOTED_STRING, true);
+  expect_scan("$t", DOLLAR_QUOTED_STRING, false);
+  expect_scan("$t$", DOLLAR_QUOTED_STRING, false);
+  expect_scan("$t$x", DOLLAR_QUOTED_STRING, false);
+  expect_scan("$t$x$", DOLLAR_QUOTED_STRING, false);
+  expect_scan("$t$x$t", DOLLAR_QUOTED_STRING, false);
   expect_scan("$tag$raw$tag$", DOLLAR_QUOTED_STRING, true);
   expect_scan("$tag$raw$other$", DOLLAR_QUOTED_STRING, false);
   expect_scan("$caf\xc3\xa9$raw$caf\xc3\xa9$", DOLLAR_QUOTED_STRING, false);

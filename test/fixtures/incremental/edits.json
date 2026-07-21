@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "temporal_replacement",
+      "initial": "$width@start",
+      "edits": [
+        {
+          "start_byte": 7,
+          "old_end_byte": 12,
+          "new_text": "previous",
+          "start_point": [0, 7],
+          "old_end_point": [0, 12],
+          "new_end_point": [0, 15],
+          "expected_clean": true,
+          "max_changed_bytes": 32
+        }
+      ],
+      "final": "$width@previous"
+    },
+    {
+      "id": "binding_member_insertion",
+      "initial": "$component.alias",
+      "edits": [
+        {
+          "start_byte": 10,
+          "old_end_byte": 10,
+          "new_text": ".exported",
+          "start_point": [0, 10],
+          "old_end_point": [0, 10],
+          "new_end_point": [0, 19],
+          "expected_clean": true,
+          "max_changed_bytes": 40
+        }
+      ],
+      "final": "$component.exported.alias"
+    },
+    {
+      "id": "doubled_quote_insertion",
+      "initial": "'text'",
+      "edits": [
+        {
+          "start_byte": 3,
+          "old_end_byte": 3,
+          "new_text": "''",
+          "start_point": [0, 3],
+          "old_end_point": [0, 3],
+          "new_end_point": [0, 5],
+          "expected_clean": true,
+          "max_changed_bytes": 16
+        }
+      ],
+      "final": "'te''xt'"
+    },
+    {
+      "id": "projection_insertion",
+      "initial": "SELECT m.x FROM movies m",
+      "edits": [
+        {
+          "start_byte": 10,
+          "old_end_byte": 10,
+          "new_text": ", m.y",
+          "start_point": [0, 10],
+          "old_end_point": [0, 10],
+          "new_end_point": [0, 15],
+          "expected_clean": true,
+          "max_changed_bytes": 48
+        }
+      ],
+      "final": "SELECT m.x, m.y FROM movies m"
+    },
+    {
+      "id": "multiline_quote_close_reopen",
+      "initial": "'line one\nline two'",
+      "edits": [
+        {
+          "start_byte": 18,
+          "old_end_byte": 19,
+          "new_text": "",
+          "start_point": [1, 8],
+          "old_end_point": [1, 9],
+          "new_end_point": [1, 8],
+          "expected_clean": false,
+          "max_changed_bytes": 32
+        },
+        {
+          "start_byte": 18,
+          "old_end_byte": 18,
+          "new_text": "'",
+          "start_point": [1, 8],
+          "old_end_point": [1, 8],
+          "new_end_point": [1, 9],
+          "expected_clean": true,
+          "max_changed_bytes": 32
+        }
+      ],
+      "final": "'line one\nline two'"
+    }
+  ]
+}

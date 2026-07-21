@@ -1,9 +1,9 @@
 {
   "synchronization": {
     "source_repository": "https://github.com/avenger-vis/avenger",
-    "source_revision": "a059fb9d4a6c5467bbb785fa1b6efc22703369ad",
+    "source_revision": "b0eb9f85abe8b3a091b4d5768f3a6dffb5fae60d",
     "source_path": "avenger-lang-core/tests/fixtures/tokens/tree_sitter_conformance.json",
-    "content_sha256": "d6411977ebd5c820372cb01f9f247ca1276afaaf5724649ccdc2dab10c78d07d"
+    "content_sha256": "7379a1a3d5bde46c6c0e4a1c79cc76c7139a1476243a8d84d94cbcf1314b1e77"
   },
   "manifest": {
     "schema_version": 1,
@@ -471,6 +471,34 @@
         "category": "expression",
         "stage": "expression",
         "source": "$width@start::double + CAST(1 AS DOUBLE)",
+        "accepted": true
+      },
+      {
+        "id": "expression_typed_date",
+        "category": "expression",
+        "stage": "expression",
+        "source": "DATE '2026-07-21'",
+        "accepted": true
+      },
+      {
+        "id": "expression_typed_time",
+        "category": "expression",
+        "stage": "expression",
+        "source": "TIME '12:34:56'",
+        "accepted": true
+      },
+      {
+        "id": "expression_typed_timestamp",
+        "category": "expression",
+        "stage": "expression",
+        "source": "TIMESTAMP '2026-07-21 12:34:56'",
+        "accepted": true
+      },
+      {
+        "id": "expression_interval",
+        "category": "expression",
+        "stage": "expression",
+        "source": "INTERVAL '1 day'",
         "accepted": true
       },
       {

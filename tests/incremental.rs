@@ -1,4 +1,32 @@
+use serde::Deserialize;
 use tree_sitter::{InputEdit, Parser, Point, Tree};
+
+#[derive(Deserialize)]
+struct EditManifest {
+    schema_version: u32,
+    cases: Vec<EditCase>,
+}
+
+#[derive(Deserialize)]
+struct EditCase {
+    id: String,
+    initial: String,
+    edits: Vec<CheckedEdit>,
+    #[serde(rename = "final")]
+    final_source: String,
+}
+
+#[derive(Deserialize)]
+struct CheckedEdit {
+    start_byte: usize,
+    old_end_byte: usize,
+    new_text: String,
+    start_point: [usize; 2],
+    old_end_point: [usize; 2],
+    new_end_point: [usize; 2],
+    expected_clean: bool,
+    max_changed_bytes: usize,
+}
 
 fn parser() -> Parser {
     let mut parser = Parser::new();
@@ -147,6 +175,68 @@ fn quote_close_and_reopen_converges() {
     assert!(open_tree.root_node().has_error());
     let repaired = assert_incremental_matches_clean(&mut parser, open, closed, open_tree);
     assert!(!repaired.root_node().has_error());
+}
+
+#[test]
+fn checked_edit_manifest_converges_with_local_ranges() {
+    let manifest: EditManifest =
+        serde_json::from_str(include_str!("../test/fixtures/incremental/edits.json")).unwrap();
+    assert_eq!(manifest.schema_version, 1);
+
+    for case in manifest.cases {
+        let mut parser = parser();
+        let mut source = case.initial;
+        let mut tree = parser.parse(&source, None).unwrap();
+        for edit in case.edits {
+            assert_eq!(
+                point_at(&source, edit.start_byte),
+                Point::new(edit.start_point[0], edit.start_point[1]),
+                "{} start point",
+                case.id
+            );
+            assert_eq!(
+                point_at(&source, edit.old_end_byte),
+                Point::new(edit.old_end_point[0], edit.old_end_point[1]),
+                "{} old end point",
+                case.id
+            );
+            let input_edit = InputEdit {
+                start_byte: edit.start_byte,
+                old_end_byte: edit.old_end_byte,
+                new_end_byte: edit.start_byte + edit.new_text.len(),
+                start_position: Point::new(edit.start_point[0], edit.start_point[1]),
+                old_end_position: Point::new(edit.old_end_point[0], edit.old_end_point[1]),
+                new_end_position: Point::new(edit.new_end_point[0], edit.new_end_point[1]),
+            };
+            source.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+            tree.edit(&input_edit);
+            let incremental = parser.parse(&source, Some(&tree)).unwrap();
+            let clean = parser.parse(&source, None).unwrap();
+            assert_eq!(
+                incremental.root_node().to_sexp(),
+                clean.root_node().to_sexp(),
+                "{} tree",
+                case.id
+            );
+            assert_eq!(
+                !incremental.root_node().has_error(),
+                edit.expected_clean,
+                "{} cleanliness",
+                case.id
+            );
+            let changed_bytes = tree
+                .changed_ranges(&incremental)
+                .map(|range| range.end_byte - range.start_byte)
+                .sum::<usize>();
+            assert!(
+                changed_bytes <= edit.max_changed_bytes,
+                "{} changed {changed_bytes} bytes",
+                case.id
+            );
+            tree = incremental;
+        }
+        assert_eq!(source, case.final_source, "{} final source", case.id);
+    }
 }
 
 #[test]

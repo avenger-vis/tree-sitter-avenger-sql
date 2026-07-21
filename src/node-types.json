@@ -114,6 +114,10 @@
           "named": true
         },
         {
+          "type": "typed_string_expression",
+          "named": true
+        },
+        {
           "type": "unary_expression",
           "named": true
         }
@@ -202,6 +206,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -295,6 +303,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -382,6 +394,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -496,6 +512,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -707,6 +727,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -839,6 +863,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -926,6 +954,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -1019,6 +1051,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -1106,6 +1142,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -1241,6 +1281,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -1331,11 +1375,23 @@
       "required": true,
       "types": [
         {
+          "type": "keyword_date",
+          "named": true
+        },
+        {
           "type": "keyword_double",
           "named": true
         },
         {
           "type": "keyword_precision",
+          "named": true
+        },
+        {
+          "type": "keyword_time",
+          "named": true
+        },
+        {
+          "type": "keyword_timestamp",
           "named": true
         },
         {
@@ -1455,6 +1511,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -1585,6 +1645,10 @@
         },
         {
           "type": "subscript_expression",
+          "named": true
+        },
+        {
+          "type": "typed_string_expression",
           "named": true
         },
         {
@@ -1719,6 +1783,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -1807,6 +1875,10 @@
         },
         {
           "type": "subscript_expression",
+          "named": true
+        },
+        {
+          "type": "typed_string_expression",
           "named": true
         },
         {
@@ -1951,6 +2023,10 @@
           "named": true
         },
         {
+          "type": "typed_string_expression",
+          "named": true
+        },
+        {
           "type": "unary_expression",
           "named": true
         }
@@ -2039,6 +2115,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -2148,6 +2228,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -2244,6 +2328,10 @@
         },
         {
           "type": "subscript_expression",
+          "named": true
+        },
+        {
+          "type": "typed_string_expression",
           "named": true
         },
         {
@@ -2437,6 +2525,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -2546,6 +2638,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -2660,6 +2756,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -2837,6 +2937,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -2930,6 +3034,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -3139,6 +3247,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -3265,6 +3377,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -3417,6 +3533,10 @@
           "named": true
         },
         {
+          "type": "typed_string_expression",
+          "named": true
+        },
+        {
           "type": "unary_expression",
           "named": true
         }
@@ -3513,6 +3633,10 @@
         },
         {
           "type": "subscript_expression",
+          "named": true
+        },
+        {
+          "type": "typed_string_expression",
           "named": true
         },
         {
@@ -3614,6 +3738,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -3909,6 +4037,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -4088,6 +4220,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -4227,6 +4363,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -4353,6 +4493,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -4440,6 +4584,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -4533,6 +4681,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -4623,6 +4775,10 @@
             "named": true
           },
           {
+            "type": "typed_string_expression",
+            "named": true
+          },
+          {
             "type": "unary_expression",
             "named": true
           },
@@ -4632,6 +4788,33 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "typed_string_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "keyword_date",
+          "named": true
+        },
+        {
+          "type": "keyword_time",
+          "named": true
+        },
+        {
+          "type": "keyword_timestamp",
+          "named": true
+        },
+        {
+          "type": "single_quoted_string",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -4716,6 +4899,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -4944,6 +5131,10 @@
           "named": true
         },
         {
+          "type": "typed_string_expression",
+          "named": true
+        },
+        {
           "type": "unary_expression",
           "named": true
         }
@@ -5032,6 +5223,10 @@
           },
           {
             "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "typed_string_expression",
             "named": true
           },
           {
@@ -5371,6 +5566,10 @@
     "named": true
   },
   {
+    "type": "keyword_date",
+    "named": true
+  },
+  {
     "type": "keyword_desc",
     "named": true
   },
@@ -5584,6 +5783,14 @@
   },
   {
     "type": "keyword_ties",
+    "named": true
+  },
+  {
+    "type": "keyword_time",
+    "named": true
+  },
+  {
+    "type": "keyword_timestamp",
     "named": true
   },
   {
