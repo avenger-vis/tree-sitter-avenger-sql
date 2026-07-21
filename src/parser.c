@@ -9327,24 +9327,45 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       END_STATE();
     case 502:
       ACCEPT_TOKEN(aux_sym__unterminated_quoted_literal_token1);
-      if (lookahead == '\'') ADVANCE(856);
-      if (lookahead == '\n' ||
-          lookahead == '\r') ADVANCE(39);
+      ADVANCE_MAP(
+        '\'', 856,
+        '\n', 39,
+        '\r', 39,
+        ',', 39,
+        ';', 39,
+        ']', 39,
+        '{', 39,
+        '}', 39,
+      );
       if (lookahead != 0) ADVANCE(503);
       END_STATE();
     case 503:
       ACCEPT_TOKEN(aux_sym__unterminated_quoted_literal_token1);
-      if (lookahead == '\'') ADVANCE(857);
-      if (lookahead == '\n' ||
-          lookahead == '\r') ADVANCE(39);
+      ADVANCE_MAP(
+        '\'', 857,
+        '\n', 39,
+        '\r', 39,
+        ',', 39,
+        ';', 39,
+        ']', 39,
+        '{', 39,
+        '}', 39,
+      );
       if (lookahead != 0) ADVANCE(503);
       END_STATE();
     case 504:
       ACCEPT_TOKEN(aux_sym__unterminated_quoted_literal_token1);
-      if (lookahead == '\'') ADVANCE(858);
-      if (lookahead == '\\') ADVANCE(2);
-      if (lookahead == '\n' ||
-          lookahead == '\r') ADVANCE(40);
+      ADVANCE_MAP(
+        '\'', 858,
+        '\\', 2,
+        '\n', 40,
+        '\r', 40,
+        ',', 40,
+        ';', 40,
+        ']', 40,
+        '{', 40,
+        '}', 40,
+      );
       if (lookahead != 0) ADVANCE(506);
       END_STATE();
     case 505:
@@ -9356,10 +9377,17 @@ static bool ts_lex(TSLexer *lexer, TSStateId state) {
       END_STATE();
     case 506:
       ACCEPT_TOKEN(aux_sym__unterminated_quoted_literal_token1);
-      if (lookahead == '\'') ADVANCE(859);
-      if (lookahead == '\\') ADVANCE(2);
-      if (lookahead == '\n' ||
-          lookahead == '\r') ADVANCE(40);
+      ADVANCE_MAP(
+        '\'', 859,
+        '\\', 2,
+        '\n', 40,
+        '\r', 40,
+        ',', 40,
+        ';', 40,
+        ']', 40,
+        '{', 40,
+        '}', 40,
+      );
       if (lookahead != 0) ADVANCE(506);
       END_STATE();
     case 507:

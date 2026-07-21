@@ -369,11 +369,11 @@
               "members": [
                 {
                   "type": "PATTERN",
-                  "value": "'[^'\\n\\r]*"
+                  "value": "'[^'\\n\\r;,{}\\]]*"
                 },
                 {
                   "type": "PATTERN",
-                  "value": "[eE]'([^'\\\\\\n\\r]|\\\\[^\\n\\r])*"
+                  "value": "[eE]'([^'\\\\\\n\\r;,{}\\]]|\\\\[^\\n\\r])*"
                 },
                 {
                   "type": "PATTERN",
