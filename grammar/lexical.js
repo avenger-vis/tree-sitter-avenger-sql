@@ -9,6 +9,18 @@ export default {
     token.immediate("\u{10ffff}"),
   ),
 
+  // These hidden productions keep an unterminated quote local to its current
+  // line during editing. The impossible sentinel deliberately yields a
+  // MISSING/error node; a complete multiline token always wins by length.
+  _unterminated_quoted_literal: _ => seq(
+    token(prec(-10, choice(
+      /'[^'\n\r]*/,
+      /[eE]'([^'\\\n\r]|\\[^\n\r])*/,
+      /[xX]'[0-9A-Fa-f]*/,
+    ))),
+    token.immediate("\u{10ffff}"),
+  ),
+
   identifier: _ => IDENTIFIER,
 
   quoted_identifier: _ => choice(

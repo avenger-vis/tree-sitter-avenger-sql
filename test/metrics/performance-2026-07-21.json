@@ -1,6 +1,6 @@
 {
   "date": "2026-07-21",
-  "grammar_revision": "working tree after 2035792",
+  "grammar_revision": "composition-recovery candidate based on c01fd5789751c6dc0f79bfc526ed76b11f985584",
   "platform": {
     "os": "macOS Darwin 25.5.0 arm64",
     "cpu": "Apple M4 Pro",
@@ -12,11 +12,11 @@
   "fixture": "test/fixtures/performance/large_query.avenger.sql",
   "fixture_bytes": 1044,
   "iterations": 2000,
-  "clean_total_ns": 240436792,
-  "clean_mean_ns": 120218,
-  "incremental_total_ns": 13335959,
-  "incremental_mean_ns": 6667,
-  "process_maximum_resident_set_bytes": 115490816,
+  "clean_total_ns": 243449833,
+  "clean_mean_ns": 121724,
+  "incremental_total_ns": 13526833,
+  "incremental_mean_ns": 6763,
+  "process_maximum_resident_set_bytes": 38404096,
   "command": "/usr/bin/time -l cargo test --release --test performance -- --ignored --nocapture",
   "notes": [
     "The resident-set observation includes the Cargo test process and is not a parser-only allocation measurement.",

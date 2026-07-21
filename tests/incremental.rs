@@ -138,6 +138,18 @@ fn delimiter_and_structure_replacements_converge() {
 }
 
 #[test]
+fn quote_close_and_reopen_converges() {
+    let mut parser = parser();
+    let closed = "'line one\nline two'";
+    let open = "'line one\nline two";
+    let tree = parser.parse(closed, None).unwrap();
+    let open_tree = assert_incremental_matches_clean(&mut parser, closed, open, tree);
+    assert!(open_tree.root_node().has_error());
+    let repaired = assert_incremental_matches_clean(&mut parser, open, closed, open_tree);
+    assert!(!repaired.root_node().has_error());
+}
+
+#[test]
 fn scanner_handles_long_and_nested_inputs() {
     let mut parser = parser();
 

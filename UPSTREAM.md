@@ -129,9 +129,9 @@ not the string body. Native address/undefined-behavior sanitizer tests cover
 100,000 nested comments, 100,000-byte tags, million-byte bodies, invalid tags,
 and unterminated forms; incremental and Wasm suites cover close/reopen edits.
 
-At the initial composition candidate, CLI 0.26.3 generates ABI 15 with 2,440
-states, 25 large states, 213 symbols, 128 tokens, 28 fields, and a
-3,472,537-byte `parser.c`. This remains smaller than the obsolete 4,686-state
+At the initial composition candidate, CLI 0.26.3 generates ABI 15 with 2,450
+states, 25 large states, 215 symbols, 129 tokens, 28 fields, and a
+3,546,204-byte `parser.c`. This remains smaller than the obsolete 4,686-state
 combined parser before any structural DSL rules are added. The checked current
 record is `test/metrics/current.json`; local timing and memory evidence is in
 `test/metrics/performance-2026-07-21.json`.

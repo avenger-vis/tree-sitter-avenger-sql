@@ -356,6 +356,42 @@
         }
       ]
     },
+    "_unterminated_quoted_literal": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "TOKEN",
+          "content": {
+            "type": "PREC",
+            "value": -10,
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "PATTERN",
+                  "value": "'[^'\\n\\r]*"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[eE]'([^'\\\\\\n\\r]|\\\\[^\\n\\r])*"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[xX]'[0-9A-Fa-f]*"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "IMMEDIATE_TOKEN",
+          "content": {
+            "type": "STRING",
+            "value": "􏿿"
+          }
+        }
+      ]
+    },
     "identifier": {
       "type": "PATTERN",
       "value": "[_\\p{Alphabetic}][_\\p{Alphabetic}0-9]*"
@@ -625,6 +661,10 @@
         {
           "type": "SYMBOL",
           "name": "_unsupported_unicode_string"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_unterminated_quoted_literal"
         },
         {
           "type": "SYMBOL",

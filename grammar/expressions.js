@@ -20,6 +20,7 @@ const PREC = {
 export default {
   _expression: $ => choice(
     $._unsupported_unicode_string,
+    $._unterminated_quoted_literal,
     $.literal,
     $.binding_reference,
     $.function_call,
