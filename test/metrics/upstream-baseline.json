@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-07-21",
+  "tree_sitter_cli": "0.26.3",
+  "upstream": {
+    "commit": "c2e1e08db1ea20dc23bdb8d228a81a8756e9c450",
+    "generation_seconds": 92.13,
+    "state_count": 30622,
+    "large_state_count": 5243,
+    "symbol_count": 770,
+    "token_count": 429,
+    "field_count": 53,
+    "parser_c_bytes": 41602006,
+    "grammar_json_bytes": 580028,
+    "node_types_json_bytes": 291023,
+    "wasm_bytes": 11065957,
+    "warnings": [
+      "unnecessary conflict: field, _qualified_field"
+    ]
+  },
+  "legacy_combined_avenger": {
+    "commit": "2661a76a1796b34b0c16afb5fed35cc81e45b807",
+    "language_abi": 15,
+    "state_count": 4686,
+    "large_state_count": 16,
+    "symbol_count": 346,
+    "token_count": 196,
+    "field_count": 88,
+    "parser_c_bytes": 4750682,
+    "grammar_json_bytes": 265736,
+    "node_types_json_bytes": 80177
+  }
+}
