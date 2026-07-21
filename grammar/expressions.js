@@ -96,7 +96,7 @@ export default {
 
   over_clause: $ => seq(
     $.keyword_over,
-    choice($.identifier, $.window_specification),
+    choice($.identifier, $.quoted_identifier, $.window_specification),
   ),
 
   window_specification: $ => seq(
@@ -172,16 +172,27 @@ export default {
     optional($.identifier),
   )),
 
-  unary_expression: $ => prec.right(PREC.UNARY, seq(
-    field("operator", choice("+", "-", "~", "@", $.keyword_not)),
-    field("operand", $._expression),
-  )),
+  unary_expression: $ => choice(
+    prec.right(PREC.UNARY, seq(
+      field("operator", choice("+", "-", "~", "@")),
+      field("operand", $._expression),
+    )),
+    prec.right(PREC.NOT, seq(
+      field("operator", $.keyword_not),
+      field("operand", $._expression),
+    )),
+  ),
 
   binary_expression: $ => choice(
     binary($, $.keyword_or, PREC.OR),
     binary($, $.keyword_and, PREC.AND),
     binary($, choice("=", "!=", "<>", "<", "<=", ">", ">="), PREC.COMPARE),
-    binary($, choice($.keyword_like, $.keyword_ilike, $.keyword_rlike), PREC.COMPARE),
+    binary($, choice(
+      $.keyword_like,
+      $.keyword_ilike,
+      $.keyword_rlike,
+      seq($.keyword_not, choice($.keyword_like, $.keyword_ilike, $.keyword_rlike)),
+    ), PREC.COMPARE),
     binary($, choice("@>", "<@", "->", "->>"), PREC.CONTAINS),
     binary($, "||", PREC.CONCAT),
     binary($, "|", PREC.BIT_OR),
@@ -215,8 +226,14 @@ export default {
     field("value", $._expression),
     $.keyword_is,
     optional($.keyword_not),
-    field("test", choice($.keyword_null, $.keyword_true, $.keyword_false, $.keyword_distinct)),
-    optional(seq($.keyword_from, field("other", $._expression))),
+    choice(
+      field("test", choice($.keyword_null, $.keyword_true, $.keyword_false)),
+      seq(
+        field("test", $.keyword_distinct),
+        $.keyword_from,
+        field("other", $._expression),
+      ),
+    ),
   )),
 
   json_access_expression: $ => prec.left(PREC.POSTFIX, seq(

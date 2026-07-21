@@ -11,10 +11,13 @@
     "generate": "tree-sitter generate",
     "test": "tree-sitter test",
     "test:highlights": "node scripts/test_highlights.mjs",
+    "test:wasm": "tree-sitter test --wasm",
+    "test:fuzz": "tree-sitter fuzz --iterations 100 --edits 8",
     "check-generated": "sh scripts/check_generated.sh",
-    "build:wasm": "tree-sitter build --wasm --output target/tree-sitter-avenger-sql.wasm",
+    "build:wasm": "node scripts/build_wasm.mjs",
     "measure": "node scripts/measure_parser.mjs",
-    "sync-conformance": "node scripts/sync_avenger_conformance.mjs"
+    "sync-conformance": "node scripts/sync_avenger_conformance.mjs",
+    "test:scanner": "sh scripts/test_scanner_sanitizers.sh"
   },
   "license": "MIT",
   "author": "Avenger contributors and Derek Stride",
@@ -31,6 +34,7 @@
   "files": [
     "bindings/c/**",
     "bindings/rust/**",
+    "docs/**",
     "grammar.js",
     "grammar/**",
     "LICENSE",

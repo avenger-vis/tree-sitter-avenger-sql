@@ -97,13 +97,17 @@
       (identifier) @type)))
 
 (alias name: (identifier) @variable.parameter)
+(alias name: (quoted_identifier) @variable.parameter)
 (relation_alias name: (identifier) @variable.parameter)
+(relation_alias name: (quoted_identifier) @variable.parameter)
 (common_table_expression name: (identifier) @type)
+(common_table_expression name: (quoted_identifier) @type)
 
 (binding_reference
   "$" @punctuation.special
   root: (identifier) @variable.special)
 (binding_reference member: (identifier) @property)
+(json_access_expression member: (identifier) @property)
 (temporal_qualifier) @attribute
 
 [
@@ -117,4 +121,3 @@
 ["," "." ":" ";"] @punctuation.delimiter
 
 (identifier) @variable
-

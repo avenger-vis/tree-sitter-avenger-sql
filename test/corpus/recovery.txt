@@ -1,0 +1,72 @@
+================================================================================
+Incomplete qualified name
+================================================================================
+
+m.
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (qualified_name
+    (name
+      (identifier)))
+  (ERROR))
+
+================================================================================
+Incomplete case expression
+================================================================================
+
+CASE WHEN x >
+
+--------------------------------------------------------------------------------
+
+(ERROR
+  (keyword_case)
+  (keyword_when)
+  (qualified_name
+    (name
+      (identifier))))
+
+================================================================================
+Incomplete array inserts a local closer
+================================================================================
+
+[1, 2
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (array_expression
+    (literal
+      (number))
+    (literal
+      (number))
+    (MISSING "]")))
+
+================================================================================
+Incomplete window retains function and clauses
+================================================================================
+
+sum(x) OVER (PARTITION BY
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_call
+    (qualified_name
+      (name
+        (identifier)))
+    (function_argument
+      (qualified_name
+        (name
+          (identifier))))
+    (over_clause
+      (keyword_over)
+      (window_specification
+        (partition_by_clause
+          (keyword_partition)
+          (keyword_by)
+          (qualified_name
+            (name
+              (MISSING identifier))))
+        (MISSING ")")))))

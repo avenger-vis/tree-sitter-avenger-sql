@@ -58,7 +58,9 @@ fn synchronized_manifest_matches_clean_parse_expectations() {
 
     for case in synchronized.manifest.cases {
         let source = source_for_parser(&case);
-        let tree = parser.parse(&source, None).expect("parser must return a tree");
+        let tree = parser
+            .parse(&source, None)
+            .expect("parser must return a tree");
         let clean = !tree.root_node().has_error();
         if clean != case.accepted {
             mismatches.push(format!(

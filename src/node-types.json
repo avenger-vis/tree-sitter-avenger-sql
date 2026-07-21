@@ -10,6 +10,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       }
@@ -505,7 +509,7 @@
         ]
       },
       "operator": {
-        "multiple": false,
+        "multiple": true,
         "required": true,
         "types": [
           {
@@ -598,6 +602,10 @@
           },
           {
             "type": "keyword_like",
+            "named": true
+          },
+          {
+            "type": "keyword_not",
             "named": true
           },
           {
@@ -1269,6 +1277,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       },
@@ -1301,6 +1313,10 @@
         },
         {
           "type": "keyword_not",
+          "named": true
+        },
+        {
+          "type": "quoted_identifier",
           "named": true
         }
       ]
@@ -2238,6 +2254,74 @@
     }
   },
   {
+    "type": "intersect_operation",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "query",
+            "named": true
+          },
+          {
+            "type": "select_query",
+            "named": true
+          },
+          {
+            "type": "values_query",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "keyword_intersect",
+            "named": true
+          }
+        ]
+      },
+      "right": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "query",
+            "named": true
+          },
+          {
+            "type": "select_query",
+            "named": true
+          },
+          {
+            "type": "values_query",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "interval_expression",
     "named": true,
     "fields": {},
@@ -2650,6 +2734,10 @@
         {
           "type": "keyword_using",
           "named": true
+        },
+        {
+          "type": "quoted_identifier",
+          "named": true
         }
       ]
     }
@@ -2939,6 +3027,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       }
@@ -3227,6 +3319,10 @@
         },
         {
           "type": "keyword_over",
+          "named": true
+        },
+        {
+          "type": "quoted_identifier",
           "named": true
         },
         {
@@ -3661,6 +3757,10 @@
           {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "quoted_identifier",
+            "named": true
           }
         ]
       }
@@ -3675,6 +3775,10 @@
         },
         {
           "type": "keyword_as",
+          "named": true
+        },
+        {
+          "type": "quoted_identifier",
           "named": true
         }
       ]
@@ -3877,81 +3981,20 @@
   {
     "type": "set_operation",
     "named": true,
-    "fields": {
-      "left": {
-        "multiple": true,
-        "required": true,
-        "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "query",
-            "named": true
-          },
-          {
-            "type": "select_query",
-            "named": true
-          },
-          {
-            "type": "values_query",
-            "named": true
-          }
-        ]
-      },
-      "operator": {
-        "multiple": true,
-        "required": true,
-        "types": [
-          {
-            "type": "keyword_all",
-            "named": true
-          },
-          {
-            "type": "keyword_except",
-            "named": true
-          },
-          {
-            "type": "keyword_intersect",
-            "named": true
-          },
-          {
-            "type": "keyword_union",
-            "named": true
-          }
-        ]
-      },
-      "right": {
-        "multiple": true,
-        "required": true,
-        "types": [
-          {
-            "type": "(",
-            "named": false
-          },
-          {
-            "type": ")",
-            "named": false
-          },
-          {
-            "type": "query",
-            "named": true
-          },
-          {
-            "type": "select_query",
-            "named": true
-          },
-          {
-            "type": "values_query",
-            "named": true
-          }
-        ]
-      }
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "intersect_operation",
+          "named": true
+        },
+        {
+          "type": "union_except_operation",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -4714,6 +4757,90 @@
     }
   },
   {
+    "type": "union_except_operation",
+    "named": true,
+    "fields": {
+      "left": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "intersect_operation",
+            "named": true
+          },
+          {
+            "type": "query",
+            "named": true
+          },
+          {
+            "type": "select_query",
+            "named": true
+          },
+          {
+            "type": "values_query",
+            "named": true
+          }
+        ]
+      },
+      "operator": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "keyword_all",
+            "named": true
+          },
+          {
+            "type": "keyword_except",
+            "named": true
+          },
+          {
+            "type": "keyword_union",
+            "named": true
+          }
+        ]
+      },
+      "right": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "(",
+            "named": false
+          },
+          {
+            "type": ")",
+            "named": false
+          },
+          {
+            "type": "intersect_operation",
+            "named": true
+          },
+          {
+            "type": "query",
+            "named": true
+          },
+          {
+            "type": "select_query",
+            "named": true
+          },
+          {
+            "type": "values_query",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "values_query",
     "named": true,
     "fields": {},
@@ -4932,16 +5059,17 @@
   {
     "type": "wildcard",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": false,
-      "types": [
-        {
-          "type": "qualified_name",
-          "named": true
-        }
-      ]
+    "fields": {
+      "qualifier": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "name",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {

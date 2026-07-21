@@ -1,0 +1,28 @@
+{
+  "date": "2026-07-21",
+  "grammar_revision": "working tree after 2035792",
+  "platform": {
+    "os": "macOS Darwin 25.5.0 arm64",
+    "cpu": "Apple M4 Pro",
+    "memory_bytes": 51539607552,
+    "rustc": "1.96.0",
+    "clang": "Apple clang 21.0.0",
+    "tree_sitter_cli": "0.26.3"
+  },
+  "fixture": "test/fixtures/performance/large_query.avenger.sql",
+  "fixture_bytes": 1044,
+  "iterations": 2000,
+  "clean_total_ns": 240436792,
+  "clean_mean_ns": 120218,
+  "incremental_total_ns": 13335959,
+  "incremental_mean_ns": 6667,
+  "process_maximum_resident_set_bytes": 115490816,
+  "command": "/usr/bin/time -l cargo test --release --test performance -- --ignored --nocapture",
+  "notes": [
+    "The resident-set observation includes the Cargo test process and is not a parser-only allocation measurement.",
+    "Timing is evidence for regression comparison, not a portable performance guarantee.",
+    "Native address/undefined-behavior scanner sanitizers passed with 100,000 nested comments and a 100,000-byte tag plus 1,000,000-byte dollar body.",
+    "Tree-sitter fuzzing passed 100 iterations and up to 8 edits for all 43 corpus cases (seed 11927911677501522421).",
+    "The full corpus passed through the Wasm parser."
+  ]
+}

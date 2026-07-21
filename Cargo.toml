@@ -17,6 +17,7 @@ include = [
   "/README.md",
   "/bindings/c/**",
   "/bindings/rust/**",
+  "/docs/**",
   "/grammar.js",
   "/grammar/**",
   "/queries/**",

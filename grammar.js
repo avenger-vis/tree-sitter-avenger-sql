@@ -2,6 +2,7 @@ import expressionRules from "./grammar/expressions.js";
 import keywordRules from "./grammar/keywords.js";
 import lexicalRules from "./grammar/lexical.js";
 import queryRules from "./grammar/queries.js";
+import relationRules from "./grammar/relations.js";
 import typeRules from "./grammar/types.js";
 
 export default grammar({
@@ -21,6 +22,10 @@ export default grammar({
 
   word: $ => $.identifier,
 
+  conflicts: $ => [
+    [$.qualified_name, $.wildcard],
+  ],
+
   rules: {
     source_file: $ => seq(
       choice(
@@ -34,6 +39,7 @@ export default grammar({
     ...lexicalRules,
     ...typeRules,
     ...expressionRules,
+    ...relationRules,
     ...queryRules,
   },
 });

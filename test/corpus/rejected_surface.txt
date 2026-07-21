@@ -1,0 +1,69 @@
+================================================================================
+From without select is incomplete
+================================================================================
+
+FROM movies
+
+--------------------------------------------------------------------------------
+
+(ERROR
+  (from_clause
+    (keyword_from)
+    (relation
+      (qualified_name
+        (name
+          (identifier))))))
+
+================================================================================
+Insert is recovery, not a statement node
+================================================================================
+
+INSERT INTO t VALUES (1)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (in_expression
+    (qualified_name
+      (name
+        (identifier)))
+    (keyword_in)
+    (ERROR
+      (identifier)
+      (identifier)
+      (keyword_values))
+    (literal
+      (number))))
+
+================================================================================
+Spaced temporal suffix is not part of binding
+================================================================================
+
+$width @start
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (ERROR
+    (binding_reference
+      (identifier)))
+  (unary_expression
+    (qualified_name
+      (name
+        (identifier)))))
+
+================================================================================
+Hash is reserved punctuation, not an operator
+================================================================================
+
+a # b
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (qualified_name
+    (name
+      (identifier)))
+  (ERROR
+    (UNEXPECTED '#')
+    (identifier)))

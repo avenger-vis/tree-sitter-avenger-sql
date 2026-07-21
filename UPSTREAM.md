@@ -111,3 +111,27 @@ Upstream updates are reviewed selectively:
 5. update the pinned commit and disposition notes only after review.
 
 Never merge a new statement family merely because it was added upstream.
+
+## Implemented divergence and current shape
+
+The Avenger fork replaces the upstream root, lexer, scanner, expression graph,
+query graph, type surface, keyword inventory, captures, package metadata, and
+test suite. It retains upstream ancestry and selected structural ideas, but no
+upstream statement module remains. Relations are isolated in
+`grammar/relations.js`; only read queries, scalar expressions, and their
+lexical dependencies are reachable.
+
+The external scanner is stateless across tokens. It recognizes an entire
+whitespace-sensitive line comment, nested block comment, or exact tagged
+dollar string atomically, so serialization intentionally emits zero bytes.
+Allocation is proportional only to the dollar delimiter and KMP prefix table,
+not the string body. Native address/undefined-behavior sanitizer tests cover
+100,000 nested comments, 100,000-byte tags, million-byte bodies, invalid tags,
+and unterminated forms; incremental and Wasm suites cover close/reopen edits.
+
+At the initial composition candidate, CLI 0.26.3 generates ABI 15 with 2,440
+states, 25 large states, 213 symbols, 128 tokens, 28 fields, and a
+3,472,537-byte `parser.c`. This remains smaller than the obsolete 4,686-state
+combined parser before any structural DSL rules are added. The checked current
+record is `test/metrics/current.json`; local timing and memory evidence is in
+`test/metrics/performance-2026-07-21.json`.

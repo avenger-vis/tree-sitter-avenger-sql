@@ -121,6 +121,10 @@ static bool scan_dollar_quoted_string(TSLexer *lexer) {
     lexer->advance(lexer, false);
   }
 
+  if (tag_length > SIZE_MAX - 2) {
+    free(tag);
+    return false;
+  }
   size_t delimiter_length = tag_length + 2;
   char *delimiter = malloc(delimiter_length);
   size_t *prefix = calloc(delimiter_length, sizeof(size_t));

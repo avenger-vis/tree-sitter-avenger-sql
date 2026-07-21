@@ -21,8 +21,8 @@ export default {
   ),
 
   common_table_expression: $ => seq(
-    field("name", $.identifier),
-    optional(seq("(", commaSep1($.identifier), ")")),
+    field("name", choice($.identifier, $.quoted_identifier)),
+    optional(seq("(", commaSep1(choice($.identifier, $.quoted_identifier)), ")")),
     $.keyword_as,
     optional(seq(optional($.keyword_not), $.keyword_materialized)),
     "(",
@@ -30,14 +30,31 @@ export default {
     ")",
   ),
 
-  set_operation: $ => prec.left(seq(
-    field("left", $._query_primary),
+  set_operation: $ => choice(
+    $.union_except_operation,
+    $.intersect_operation,
+  ),
+
+  union_except_operation: $ => prec.left(1, seq(
+    field("left", $._union_operand),
     repeat1(seq(
       field("operator", choice(
         seq($.keyword_union, optional($.keyword_all)),
-        $.keyword_intersect,
         $.keyword_except,
       )),
+      field("right", $._union_operand),
+    )),
+  )),
+
+  _union_operand: $ => choice(
+    $.intersect_operation,
+    $._query_primary,
+  ),
+
+  intersect_operation: $ => prec.left(2, seq(
+    field("left", $._query_primary),
+    repeat1(seq(
+      field("operator", $.keyword_intersect),
       field("right", $._query_primary),
     )),
   )),
@@ -86,59 +103,18 @@ export default {
     optional(field("alias", $.alias)),
   ),
 
-  wildcard: $ => seq(
-    optional(seq($.qualified_name, ".")),
+  wildcard: $ => prec.right(20, seq(
+    optional(seq(
+      field("qualifier", $.name),
+      repeat(seq(".", field("qualifier", $.name))),
+      ".",
+    )),
     "*",
-  ),
-
-  alias: $ => seq(optional($.keyword_as), field("name", $.identifier)),
-
-  from_clause: $ => seq(
-    $.keyword_from,
-    field("relation", $.relation),
-    repeat(choice(
-      seq(",", field("relation", $.relation)),
-      $.join_clause,
-    )),
-  ),
-
-  relation: $ => prec.right(seq(
-    field("value", choice(
-      $.binding_reference,
-      $.function_call,
-      $.qualified_name,
-      $.subquery_relation,
-    )),
-    optional(field("alias", $.relation_alias)),
   )),
 
-  relation_alias: $ => seq(
+  alias: $ => seq(
     optional($.keyword_as),
-    field("name", $.identifier),
-    optional(seq("(", commaSep1($.identifier), ")")),
-  ),
-
-  subquery_relation: $ => seq("(", $._query, ")"),
-
-  join_clause: $ => seq(
-    optional(choice(
-      $.keyword_natural,
-      $.keyword_cross,
-      $.keyword_inner,
-      $.keyword_left,
-      seq($.keyword_left, optional($.keyword_outer)),
-      $.keyword_right,
-      seq($.keyword_right, optional($.keyword_outer)),
-      $.keyword_full,
-      seq($.keyword_full, optional($.keyword_outer)),
-    )),
-    $.keyword_join,
-    optional($.keyword_lateral),
-    field("relation", $.relation),
-    optional(choice(
-      seq($.keyword_on, field("predicate", $._expression)),
-      seq($.keyword_using, "(", commaSep1($.identifier), ")"),
-    )),
+    field("name", choice($.identifier, $.quoted_identifier)),
   ),
 
   where_clause: $ => seq($.keyword_where, field("predicate", $._expression)),
@@ -149,7 +125,7 @@ export default {
 
   named_window_clause: $ => seq(
     $.keyword_window,
-    field("name", $.identifier),
+    field("name", choice($.identifier, $.quoted_identifier)),
     $.keyword_as,
     $.window_specification,
   ),

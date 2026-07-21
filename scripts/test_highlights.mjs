@@ -8,14 +8,25 @@ const fixtures = readdirSync(resolve(root, "test/highlight"))
   .map(file => resolve(root, "test/highlight", file));
 if (fixtures.length === 0) throw new Error("no highlight fixtures found");
 
-const executable = process.platform === "win32" ? "tree-sitter.cmd" : "tree-sitter";
-const result = spawnSync(executable, ["highlight", "--check", ...fixtures], {
+const executable = resolve(
+  root,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "tree-sitter.cmd" : "tree-sitter",
+);
+const result = spawnSync(executable, [
+  "highlight",
+  "--check",
+  "--grammar-path",
+  root,
+  ...fixtures,
+], {
   cwd: root,
   encoding: "utf8",
   shell: process.platform === "win32",
 });
 if (result.status !== 0) {
-  process.stderr.write(result.stdout);
-  process.stderr.write(result.stderr);
+  process.stderr.write(result.stdout ?? "");
+  process.stderr.write(result.stderr ?? result.error?.message ?? "");
   process.exit(result.status ?? 1);
 }

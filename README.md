@@ -55,6 +55,7 @@ npm ci
 npm run generate
 npm test
 npm run test:highlights
+npm run test:scanner
 npm run check-generated
 npm run build:wasm
 npm run measure -- --check
@@ -73,6 +74,9 @@ npm run sync-conformance -- \
 Generated `src/parser.c`, `src/grammar.json`, `src/node-types.json`, and parser
 headers are committed. Never hand-edit them or accept corpus updates without
 reviewing each changed S-expression.
+
+See [docs/node-contract.md](docs/node-contract.md) for the stable named nodes,
+fields, recovery guidance, and pre-1.0 compatibility policy.
 
 ## Using the grammar as a base
 
