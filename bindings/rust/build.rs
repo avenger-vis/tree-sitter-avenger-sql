@@ -1,55 +1,22 @@
 fn main() {
-    let src_dir = std::path::Path::new("src");
+    let source_directory = std::path::Path::new("src");
+    let parser = source_directory.join("parser.c");
+    let scanner = source_directory.join("scanner.c");
 
-    let mut c_config = cc::Build::new();
-    c_config.std("c11").include(src_dir);
+    println!("cargo:rerun-if-changed={}", parser.display());
+    println!("cargo:rerun-if-changed={}", scanner.display());
 
-    #[cfg(target_env = "msvc")]
-    c_config.flag("-utf-8");
+    let mut build = cc::Build::new();
+    build.std("c11").include(source_directory);
+    build.file(parser).file(scanner);
 
-    if std::env::var("TARGET").unwrap() == "wasm32-unknown-unknown" {
-        let Ok(wasm_headers) = std::env::var("DEP_TREE_SITTER_LANGUAGE_WASM_HEADERS") else {
-            panic!("Environment variable DEP_TREE_SITTER_LANGUAGE_WASM_HEADERS must be set by the language crate");
-        };
-        let Ok(wasm_src) =
-            std::env::var("DEP_TREE_SITTER_LANGUAGE_WASM_SRC").map(std::path::PathBuf::from)
-        else {
-            panic!("Environment variable DEP_TREE_SITTER_LANGUAGE_WASM_SRC must be set by the language crate");
-        };
-
-        c_config.include(&wasm_headers);
-        c_config.files([
-            wasm_src.join("stdio.c"),
-            wasm_src.join("stdlib.c"),
-            wasm_src.join("string.c"),
-        ]);
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        build.flag("-utf-8");
+    } else {
+        build.flag_if_supported("-Wall");
+        build.flag_if_supported("-Wextra");
+        build.flag_if_supported("-Wpedantic");
     }
 
-    let parser_path = src_dir.join("parser.c");
-    c_config.file(&parser_path);
-    println!("cargo:rerun-if-changed={}", parser_path.to_str().unwrap());
-
-    // NOTE: if your language uses an external scanner, uncomment this block:
-    let scanner_path = src_dir.join("scanner.c");
-    c_config.file(&scanner_path);
-    println!("cargo:rerun-if-changed={}", scanner_path.to_str().unwrap());
-
-    c_config.compile("tree-sitter-sql");
-
-    println!("cargo:rustc-check-cfg=cfg(with_highlights_query)");
-    if !"queries/highlights.scm".is_empty() && std::path::Path::new("queries/highlights.scm").exists() {
-        println!("cargo:rustc-cfg=with_highlights_query");
-    }
-    println!("cargo:rustc-check-cfg=cfg(with_injections_query)");
-    if !"queries/injections.scm".is_empty() && std::path::Path::new("queries/injections.scm").exists() {
-        println!("cargo:rustc-cfg=with_injections_query");
-    }
-    println!("cargo:rustc-check-cfg=cfg(with_locals_query)");
-    if !"queries/locals.scm".is_empty() && std::path::Path::new("queries/locals.scm").exists() {
-        println!("cargo:rustc-cfg=with_locals_query");
-    }
-    println!("cargo:rustc-check-cfg=cfg(with_tags_query)");
-    if !"queries/tags.scm".is_empty() && std::path::Path::new("queries/tags.scm").exists() {
-        println!("cargo:rustc-cfg=with_tags_query");
-    }
+    build.compile("tree-sitter-avenger-sql");
 }

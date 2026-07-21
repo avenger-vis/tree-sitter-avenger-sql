@@ -1,436 +1,250 @@
-import { optional_parenthesis, paren_list, wrapped_in_parenthesis } from "./helpers.js";
+import { commaSep, commaSep1 } from "./helpers.js";
+
+const PREC = {
+  OR: 1,
+  AND: 2,
+  NOT: 3,
+  COMPARE: 4,
+  CONTAINS: 5,
+  CONCAT: 6,
+  BIT_OR: 7,
+  BIT_XOR: 8,
+  BIT_AND: 9,
+  SHIFT: 10,
+  ADD: 11,
+  MULTIPLY: 12,
+  UNARY: 13,
+  POSTFIX: 14,
+};
 
 export default {
-
-  _expression: $ => prec(1,
-    choice(
-      $.literal,
-      alias(
-        $._qualified_field,
-        $.field,
-      ),
-      $.parameter,
-      $.list,
-      $.case,
-      $.window_function,
-      $.subquery,
-      $.cast,
-      alias($.implicit_cast, $.cast),
-      $.exists,
-      $.invocation,
-      $.binary_expression,
-      $.subscript,
-      $.unary_expression,
-      $.array,
-      $.interval,
-      $.between_expression,
-      $.parenthesized_expression,
-      $.object_id,
-    )
+  _expression: $ => choice(
+    $._unsupported_unicode_string,
+    $.literal,
+    $.binding_reference,
+    $.function_call,
+    $.case_expression,
+    $.cast_expression,
+    $.exists_expression,
+    $.interval_expression,
+    $.array_expression,
+    $.struct_expression,
+    $.subquery_expression,
+    $.parenthesized_expression,
+    $.qualified_name,
+    $.unary_expression,
+    $.binary_expression,
+    $.between_expression,
+    $.in_expression,
+    $.is_expression,
+    $.postfix_cast_expression,
+    $.json_access_expression,
+    $.subscript_expression,
   ),
 
-    object_reference: $ => choice(
-      seq(
-        field('database', $.identifier),
-        '.',
-        field('schema', $.identifier),
-        '.',
-        field('name', $.identifier),
-      ),
-      seq(
-        field('schema', $.identifier),
-        '.',
-        field('name', $.identifier),
-      ),
-      field('name', $.identifier),
-    ),
+  binding_reference: $ => seq(
+    "$",
+    field("root", alias(token.immediate(/[_\p{Alphabetic}][_\p{Alphabetic}0-9]*/), $.identifier)),
+    repeat(seq(".", field("member", $.identifier))),
+    optional(field("temporal", $.temporal_qualifier)),
+  ),
 
-    field: $ => field('name', $.identifier),
+  temporal_qualifier: _ => token.immediate(choice("@start", "@previous")),
 
-    _qualified_field: $ => seq(
-      optional(
-        seq(
-          optional_parenthesis($.object_reference),
-          '.',
-        ),
-      ),
-      field('name', $.identifier),
-    ),
+  parenthesized_expression: $ => prec(PREC.POSTFIX, seq("(", $._expression, ")")),
 
-  parameter: $ => /\?|(\$[0-9]+)/,
+  subquery_expression: $ => seq("(", $._query, ")"),
 
-  case: $ => seq(
-    $.keyword_case,
+  array_expression: $ => seq("[", commaSep($._expression), "]"),
+
+  struct_expression: $ => seq(
+    "{",
+    commaSep($.struct_field),
+    "}",
+  ),
+
+  struct_field: $ => seq(
+    field("name", choice($.identifier, $.quoted_identifier, $.single_quoted_string)),
+    ":",
+    field("value", $._expression),
+  ),
+
+  function_call: $ => prec(PREC.POSTFIX, seq(
+    field("function", $.qualified_name),
+    "(",
+    optional($.keyword_distinct),
+    commaSep($.function_argument),
+    optional($.order_by_clause),
+    ")",
+    optional($.filter_clause),
+    optional($.over_clause),
+  )),
+
+  function_argument: $ => choice(
+    seq(field("name", $.identifier), choice("=>", ":="), field("value", $._expression)),
+    $._expression,
+    "*",
+  ),
+
+  filter_clause: $ => seq(
+    $.keyword_filter,
+    "(",
+    $.keyword_where,
+    field("predicate", $._expression),
+    ")",
+  ),
+
+  over_clause: $ => seq(
+    $.keyword_over,
+    choice($.identifier, $.window_specification),
+  ),
+
+  window_specification: $ => seq(
+    "(",
+    optional($.partition_by_clause),
+    optional($.order_by_clause),
+    optional($.window_frame),
+    ")",
+  ),
+
+  partition_by_clause: $ => seq(
+    $.keyword_partition,
+    $.keyword_by,
+    commaSep1($._expression),
+  ),
+
+  window_frame: $ => seq(
+    choice($.keyword_rows, $.keyword_range, $.keyword_groups),
     choice(
-      // simplified CASE x WHEN
-      seq(
-        $._expression,
-        $.keyword_when,
-        $._expression,
-        $.keyword_then,
-        $._expression,
-        repeat(
-          seq(
-            $.keyword_when,
-            $._expression,
-            $.keyword_then,
-            $._expression,
-          )
-        ),
-      ),
-      // standard CASE WHEN x, where x must be a predicate
-      seq(
-        $.keyword_when,
-        $._expression,
-        $.keyword_then,
-        $._expression,
-        repeat(
-          seq(
-            $.keyword_when,
-            $._expression,
-            $.keyword_then,
-            $._expression,
-          )
-        ),
-      ),
+      $.frame_bound,
+      seq($.keyword_between, $.frame_bound, $.keyword_and, $.frame_bound),
     ),
-    optional(
-      seq(
-        $.keyword_else,
-        $._expression,
-      )
-    ),
+    optional(seq(
+      $.keyword_exclude,
+      choice(
+        seq($.keyword_current, $.keyword_row),
+        $.keyword_group,
+        $.keyword_ties,
+        seq($.keyword_no, $.keyword_others),
+      ),
+    )),
+  ),
+
+  frame_bound: $ => choice(
+    seq($.keyword_unbounded, choice($.keyword_preceding, $.keyword_following)),
+    seq($._expression, choice($.keyword_preceding, $.keyword_following)),
+    seq($.keyword_current, $.keyword_row),
+  ),
+
+  case_expression: $ => seq(
+    $.keyword_case,
+    optional(field("operand", $._expression)),
+    repeat1(seq(
+      $.keyword_when,
+      field("condition", $._expression),
+      $.keyword_then,
+      field("result", $._expression),
+    )),
+    optional(seq($.keyword_else, field("else", $._expression))),
     $.keyword_end,
   ),
 
-  implicit_cast: $ => seq(
-    $._expression,
-    '::',
-    $._type,
+  cast_expression: $ => seq(
+    $.keyword_cast,
+    "(",
+    field("value", $._expression),
+    $.keyword_as,
+    field("type", $.data_type),
+    ")",
   ),
 
-  cast: $ => seq(
-    field('name', $.keyword_cast),
-    wrapped_in_parenthesis(
-      seq(
-        field('parameter', $._expression),
-        $.keyword_as,
-        $._type,
-      ),
-    ),
-  ),
+  postfix_cast_expression: $ => prec.left(PREC.POSTFIX, seq(
+    field("value", $._expression),
+    "::",
+    field("type", $.data_type),
+  )),
 
-  exists: $ => seq(
-    $.keyword_exists,
-    $.subquery,
-  ),
+  exists_expression: $ => seq($.keyword_exists, $.subquery_expression),
 
-  invocation: $ => prec(1,
-    seq(
-      $.object_reference,
-      choice(
-        // default invocation
-        paren_list(
-          seq(
-            optional($.keyword_distinct),
-            field(
-              'parameter',
-              $.term,
-            ),
-            optional($.order_by)
-          )
-        ),
-        // https://dev.mysql.com/doc/refman/8.4/en/date-and-time-functions.html#function_extract
-        paren_list(
-          seq(
-            field(
-              'unit',
-              $.object_reference,
-            ),
-            $.keyword_from,
-            $.term
-          )
-        ),
-        // _aggregate_function, e.g. group_concat
-        wrapped_in_parenthesis(
-          seq(
-            optional($.keyword_distinct),
-            field('parameter', $.term),
-            optional($.order_by),
-            optional(seq(
-              choice($.keyword_separator, ','),
-              alias($._literal_string, $.literal)
-            )),
-            optional($.limit),
-          ),
-        ),
-      ),
-      optional(
-        $.filter_expression
-      )
-    ),
-  ),
+  interval_expression: $ => prec.right(seq(
+    $.keyword_interval,
+    choice($.single_quoted_string, $.escaped_string, $.dollar_quoted_string),
+    optional($.identifier),
+  )),
 
-  filter_expression : $ => seq(
-    $.keyword_filter,
-    wrapped_in_parenthesis($.where),
-  ),
-
-  parenthesized_expression: $ => prec(2,
-    wrapped_in_parenthesis($._expression)
-  ),
-
-  subscript: $ => prec.left('binary_is',
-    seq(
-      field('expression', $._expression),
-      "[",
-      choice(
-        field('subscript', $._expression),
-        seq(
-          field('lower', $._expression),
-          ':',
-          field('upper', $._expression),
-        ),
-      ),
-      "]",
-    ),
-  ),
-
-  op_other: $ => token(
-    choice(
-      '->',
-      '->>',
-      '#>',
-      '#>>',
-      '~',
-      '!~',
-      '~*',
-      '!~*',
-      '|',
-      '&',
-      '#',
-      '<<',
-      '>>',
-      '<<=',
-      '>>=',
-      '##',
-      '<->',
-      '@>',
-      '<@',
-      '&<',
-      '&>',
-      '|>>',
-      '<<|',
-      '&<|',
-      '|&>',
-      '<^',
-      '^>',
-      '?#',
-      '?-',
-      '?|',
-      '?-|',
-      '?||',
-      '@@',
-      '@@@',
-      '@?',
-      '#-',
-      '?&',
-      '?',
-      '-|-',
-      '||',
-      '^@',
-    ),
-  ),
+  unary_expression: $ => prec.right(PREC.UNARY, seq(
+    field("operator", choice("+", "-", "~", "@", $.keyword_not)),
+    field("operand", $._expression),
+  )),
 
   binary_expression: $ => choice(
-    ...[
-      ['+', 'binary_plus'],
-      ['-', 'binary_plus'],
-      ['*', 'binary_times'],
-      ['/', 'binary_times'],
-      ['%', 'binary_times'],
-      ['^', 'binary_exp'],
-      ['=', 'binary_relation'],
-      ['<', 'binary_relation'],
-      ['<=', 'binary_relation'],
-      ['!=', 'binary_relation'],
-      ['>=', 'binary_relation'],
-      ['>', 'binary_relation'],
-      ['<>', 'binary_relation'],
-      [$.op_other, 'binary_other'],
-      [$.keyword_is, 'binary_is'],
-      [$.is_not, 'binary_is'],
-      [$.keyword_like, 'pattern_matching'],
-      [$.not_like, 'pattern_matching'],
-      [$.keyword_rlike, 'pattern_matching'],
-      [$.not_rlike, 'pattern_matching'],
-      [$.similar_to, 'pattern_matching'],
-      [$.not_similar_to, 'pattern_matching'],
-      // binary_is precedence disambiguates `(is not distinct from)` from an
-      // `is (not distinct from)` with a unary `not`
-      [$.distinct_from, 'binary_is'],
-      [$.not_distinct_from, 'binary_is'],
-    ].map(([operator, precedence]) =>
-      prec.left(precedence, seq(
-        field('left', $._expression),
-        field('operator', operator),
-        field('right', $._expression)
-      ))
-    ),
-    ...[
-      [$.keyword_and, 'clause_connective'],
-      [$.keyword_or, 'clause_disjunctive'],
-    ].map(([operator, precedence]) =>
-      prec.left(precedence, seq(
-        field('left', $._expression),
-        field('operator', operator),
-        field('right', $._expression)
-      ))
-    ),
-    ...[
-      [$.keyword_in, 'binary_in'],
-      [$.not_in, 'binary_in'],
-    ].map(([operator, precedence]) =>
-      prec.left(precedence, seq(
-        field('left', $._expression),
-        field('operator', operator),
-        field('right', choice($.list, $.subquery))
-      ))
-    ),
+    binary($, $.keyword_or, PREC.OR),
+    binary($, $.keyword_and, PREC.AND),
+    binary($, choice("=", "!=", "<>", "<", "<=", ">", ">="), PREC.COMPARE),
+    binary($, choice($.keyword_like, $.keyword_ilike, $.keyword_rlike), PREC.COMPARE),
+    binary($, choice("@>", "<@", "->", "->>"), PREC.CONTAINS),
+    binary($, "||", PREC.CONCAT),
+    binary($, "|", PREC.BIT_OR),
+    binary($, "^", PREC.BIT_XOR),
+    binary($, "&", PREC.BIT_AND),
+    binary($, choice("<<", ">>"), PREC.SHIFT),
+    binary($, choice("+", "-"), PREC.ADD),
+    binary($, choice("*", "/", "%"), PREC.MULTIPLY),
   ),
 
-  op_unary_other: $ => token(
-    choice(
-      '|/',
-      '||/',
-      '@',
-      '~',
-      '@-@',
-      '@@',
-      '#',
-      '?-',
-      '?|',
-      '!!',
-    ),
-  ),
+  between_expression: $ => prec.left(PREC.COMPARE, seq(
+    field("value", $._expression),
+    optional($.keyword_not),
+    $.keyword_between,
+    field("lower", $._expression),
+    $.keyword_and,
+    field("upper", $._expression),
+  )),
 
-  unary_expression: $ => choice(
-    ...[
-      [$.keyword_not, 'unary_not'],
-      [$.bang, 'unary_not'],
-      [$.keyword_any, 'unary_not'],
-      [$.keyword_some, 'unary_not'],
-      [$.keyword_all, 'unary_not'],
-      [$.op_unary_other, 'unary_other'],
-    ].map(([operator, precedence]) =>
-      prec.left(precedence, seq(
-        field('operator', operator),
-        field('operand', $._expression)
-      ))
-    ),
-  ),
-
-  // Postgres syntax for intervals
-  interval: $ => seq(
-      $.keyword_interval,
-      $._literal_string,
-  ),
-
-  between_expression: $ => choice(
-    ...[
-          [$.keyword_between, 'between'],
-          [seq($.keyword_not, $.keyword_between), 'between'],
-      ].map(([operator, precedence]) =>
-              prec.left(precedence, seq(
-              field('left', $._expression),
-              field('operator', operator),
-              field('low', $._expression),
-              $.keyword_and,
-              field('high', $._expression)
-          ))
-      ),
-  ),
-
-  not_in: $ => seq(
-    $.keyword_not,
+  in_expression: $ => prec.left(PREC.COMPARE, seq(
+    field("value", $._expression),
+    optional($.keyword_not),
     $.keyword_in,
-  ),
-
-  subquery: $ => wrapped_in_parenthesis(
-    $._dml_read
-  ),
-
-  list: $ => paren_list($._expression),
-
-  literal: $ => prec(2,
     choice(
-      $._integer,
-      $._decimal_number,
-      $._literal_string,
-      $._bit_string,
-      $._string_casting,
-      $.keyword_true,
-      $.keyword_false,
-      $.keyword_null,
+      seq("(", commaSep1($._expression), ")"),
+      $.subquery_expression,
     ),
-  ),
-  _double_quote_string: _ => /"[^"]*"/,
-  _backtick_quoted_string: _ => /`[^`]*`/,
-  // The norm specify that between two consecutive string must be a return,
-  // but this is good enough.
-  _single_quote_string: _ => seq(/([uU]&|[nN])?'([^']|'')*'/, repeat(/'([^']|'')*'/)),
+  )),
 
-  _postgres_escape_string: _ => /(e|E)'([^']|\\')*'/,
+  is_expression: $ => prec.left(PREC.COMPARE, seq(
+    field("value", $._expression),
+    $.keyword_is,
+    optional($.keyword_not),
+    field("test", choice($.keyword_null, $.keyword_true, $.keyword_false, $.keyword_distinct)),
+    optional(seq($.keyword_from, field("other", $._expression))),
+  )),
 
-  _literal_string: $ => prec(
-    1,
+  json_access_expression: $ => prec.left(PREC.POSTFIX, seq(
+    field("value", $._expression),
+    ":",
+    field("member", $.identifier),
+    repeat(seq(".", field("member", $.identifier))),
+  )),
+
+  subscript_expression: $ => prec.left(PREC.POSTFIX, seq(
+    field("value", $._expression),
+    "[",
     choice(
-      $._single_quote_string,
-      $._double_quote_string,
-      $._dollar_quoted_string,
-      $._postgres_escape_string,
-    ),
-  ),
-  _natural_number: _ => /\d+/,
-  _integer: $ => seq(
-    optional(choice("-", "+")),
-    /(0[xX][0-9A-Fa-f]+(_[0-9A-Fa-f]+)*)|(0[oO][0-7]+(_[0-7]+)*)|(0[bB][01]+(_[01]+)*)|(\d+(_\d+)*(e[+-]?\d+(_\d+)*)?)/
-  ),
-  _decimal_number: $ => seq(
-    optional(
-      choice("-", "+")),
-    /((\d+(_\d+)*)?[.]\d+(_\d+)*(e[+-]?\d+(_\d+)*)?)|(\d+(_\d+)*[.](e[+-]?\d+(_\d+)*)?)/
-  ),
-  _bit_string: $ => seq(/[bBxX]'([^']|'')*'/, repeat(/'([^']|'')*'/)),
-  // The identifier should be followed by a string (no parenthesis allowed)
-  _string_casting: $ => seq($.identifier, $._single_quote_string),
-
-  bang: _ => '!',
-
-  identifier: $ => choice(
-    $._identifier,
-    $._double_quote_string,
-    $._backtick_quoted_string,
-    $._tsql_parameter,
-    seq("`", $._identifier, "`"),
-  ),
-  _tsql_parameter: $ => seq('@', $._identifier),
-  // support nordic chars and umlaue
-  _identifier: _ => /[A-Za-z_\u00C0-\u017F][0-9A-Za-z_\u00C0-\u017F]*/,
-
-  object_id: $ => seq(
-    $.keyword_object_id,
-    wrapped_in_parenthesis(
+      field("index", $._expression),
       seq(
-        alias($._literal_string, $.literal),
-        optional(
-          seq(
-            ',',
-            alias($._literal_string, $.literal),
-          ),
-        ),
+        optional(field("lower", $._expression)),
+        ":",
+        optional(field("upper", $._expression)),
       ),
     ),
-  ),
-
+    "]",
+  )),
 };
+
+function binary($, operator, precedence) {
+  return prec.left(precedence, seq(
+    field("left", $._expression),
+    field("operator", operator),
+    field("right", $._expression),
+  ));
+}

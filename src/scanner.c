@@ -1,188 +1,207 @@
 #include "tree_sitter/parser.h"
+
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
-#include <wctype.h>
 
 enum TokenType {
-  DOLLAR_QUOTED_STRING_START_TAG,
-  DOLLAR_QUOTED_STRING_END_TAG,
-  DOLLAR_QUOTED_STRING
+  LINE_COMMENT,
+  BLOCK_COMMENT,
+  DOLLAR_QUOTED_STRING,
 };
 
-#define MALLOC_STRING_SIZE 1024
-
-typedef struct LexerState {
-  char* start_tag;
-} LexerState;
-
-void *tree_sitter_sql_external_scanner_create() {
-  LexerState *state = malloc(sizeof(LexerState));
-  state->start_tag = NULL;
-  return state;
+static bool is_avenger_whitespace(int32_t codepoint) {
+  return (codepoint >= 0x0009 && codepoint <= 0x000d) || codepoint == 0x0020 ||
+         codepoint == 0x0085 || codepoint == 0x00a0 || codepoint == 0x1680 ||
+         (codepoint >= 0x2000 && codepoint <= 0x200a) ||
+         codepoint == 0x2028 || codepoint == 0x2029 || codepoint == 0x202f ||
+         codepoint == 0x205f || codepoint == 0x3000;
 }
 
-void tree_sitter_sql_external_scanner_destroy(void *payload) {
-  LexerState *state = (LexerState*)payload;
-  if (state->start_tag != NULL) {
-    free(state->start_tag);
-    state->start_tag = NULL;
-  }
-  free(payload);
+static bool is_ascii_alpha(int32_t codepoint) {
+  return (codepoint >= 'a' && codepoint <= 'z') ||
+         (codepoint >= 'A' && codepoint <= 'Z');
 }
 
-static char* add_char(char* text, size_t* text_size, char c, int index) {
-  if (text == NULL) {
-    text = malloc(sizeof(char) * MALLOC_STRING_SIZE);
-    *text_size = MALLOC_STRING_SIZE;
-  }
-
-  // will break when indexes advances more than MALLOC_STRING_SIZE
-  if (index + 1 >= *text_size) {
-    *text_size += MALLOC_STRING_SIZE;
-    char* tmp = malloc(*text_size * sizeof(char));
-    strncpy(tmp, text, *text_size);
-    free(text);
-    text = tmp;
-  }
-
-  text[index] = c;
-  text[index + 1] = '\0';
-  return text;
+static bool is_ascii_digit(int32_t codepoint) {
+  return codepoint >= '0' && codepoint <= '9';
 }
 
-static char* scan_dollar_string_tag(TSLexer *lexer) {
-  char* tag = NULL;
-  int index = 0;
-  size_t* text_size = malloc(sizeof(size_t));
-  *text_size = 0;
-  if (lexer->lookahead == '$') {
-    tag = add_char(tag, text_size, '$', index);
-    lexer->advance(lexer, false);
-  } else {
-    free(text_size);
-    return NULL;
-  }
-
-  while (lexer->lookahead != '$' && !iswspace(lexer->lookahead) && !lexer->eof(lexer)) {
-    tag = add_char(tag, text_size, lexer->lookahead, ++index);
-    lexer->advance(lexer, false);
-  }
-
-  if (lexer->lookahead == '$') {
-    tag = add_char(tag, text_size, lexer->lookahead, ++index);
-    lexer->advance(lexer, false);
-    free(text_size);
-    return tag;
-  } else {
-    free(tag);
-    free(text_size);
-    return NULL;
-  }
-}
-
-bool tree_sitter_sql_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols) {
-  LexerState *state = (LexerState*)payload;
-  if (valid_symbols[DOLLAR_QUOTED_STRING_START_TAG] && state->start_tag == NULL) {
-    while (iswspace(lexer->lookahead)) lexer->advance(lexer, true);
-
-    char* start_tag = scan_dollar_string_tag(lexer);
-    if (start_tag == NULL) {
-      return false;
-    }
-    if (state->start_tag != NULL) {
-      free(state->start_tag);
-      state->start_tag = NULL;
-    }
-    state->start_tag = start_tag;
-    lexer->result_symbol = DOLLAR_QUOTED_STRING_START_TAG;
-    return true;
-  }
-
-  if (valid_symbols[DOLLAR_QUOTED_STRING_END_TAG] && state->start_tag != NULL) {
-    while (iswspace(lexer->lookahead)) lexer->advance(lexer, true);
-
-    char* end_tag = scan_dollar_string_tag(lexer);
-    if (end_tag != NULL && strcmp(end_tag, state->start_tag) == 0) {
-      free(state->start_tag);
-      state->start_tag = NULL;
-      lexer->result_symbol = DOLLAR_QUOTED_STRING_END_TAG;
-      free(end_tag);
-      return true;
-    }
-    if (end_tag != NULL) {
-      free(end_tag);
-    }
+static bool scan_line_comment(TSLexer *lexer) {
+  if (lexer->lookahead != '-') return false;
+  lexer->advance(lexer, false);
+  if (lexer->lookahead != '-') return false;
+  lexer->advance(lexer, false);
+  if (lexer->eof(lexer) || !is_avenger_whitespace(lexer->lookahead)) {
     return false;
   }
 
-  if (valid_symbols[DOLLAR_QUOTED_STRING]) {
-    lexer->mark_end(lexer);
-    while (iswspace(lexer->lookahead)) lexer->advance(lexer, true);
+  while (!lexer->eof(lexer)) {
+    int32_t codepoint = lexer->lookahead;
+    lexer->advance(lexer, false);
+    if (codepoint == '\n') break;
+  }
+  lexer->mark_end(lexer);
+  lexer->result_symbol = LINE_COMMENT;
+  return true;
+}
 
-    char* start_tag = scan_dollar_string_tag(lexer);
-    if (start_tag == NULL) {
-      return false;
+static bool scan_block_comment(TSLexer *lexer) {
+  if (lexer->lookahead != '/') return false;
+  lexer->advance(lexer, false);
+  if (lexer->lookahead != '*') return false;
+  lexer->advance(lexer, false);
+
+  uint32_t depth = 1;
+  int32_t previous = 0;
+  while (!lexer->eof(lexer)) {
+    int32_t current = lexer->lookahead;
+    lexer->advance(lexer, false);
+    if (previous == '/' && current == '*') {
+      if (depth == UINT32_MAX) return false;
+      depth++;
+      previous = 0;
+      continue;
     }
-
-    if (state->start_tag != NULL && strcmp(state->start_tag, start_tag) == 0) {
-      return false;
-    }
-
-    char* end_tag = NULL;
-    while (true) {
-      if (lexer->eof(lexer)) {
-        free(start_tag);
-        free(end_tag);
-        return false;
-      }
-
-      end_tag = scan_dollar_string_tag(lexer);
-      if (end_tag == NULL) {
-        lexer->advance(lexer, false);
-        continue;
-      }
-
-      if (strcmp(end_tag, start_tag) == 0) {
-        free(start_tag);
-        free(end_tag);
+    if (previous == '*' && current == '/') {
+      depth--;
+      if (depth == 0) {
         lexer->mark_end(lexer);
-        lexer->result_symbol = DOLLAR_QUOTED_STRING;
+        lexer->result_symbol = BLOCK_COMMENT;
         return true;
       }
-
-      free(end_tag);
-      end_tag = NULL;
+      previous = 0;
+      continue;
     }
+    previous = current;
   }
-
   return false;
 }
 
-unsigned tree_sitter_sql_external_scanner_serialize(void *payload, char *buffer) {
-  LexerState *state = (LexerState *)payload;
-  if (state == NULL || state->start_tag == NULL) {
-    return 0;
+static bool append_byte(char **buffer, size_t *length, size_t *capacity,
+                        char byte) {
+  if (*length == *capacity) {
+    size_t next_capacity = *capacity == 0 ? 16 : *capacity * 2;
+    if (next_capacity < *capacity) return false;
+    char *next = realloc(*buffer, next_capacity);
+    if (next == NULL) return false;
+    *buffer = next;
+    *capacity = next_capacity;
   }
-  // + 1 for the '\0'
-  int tag_length = strlen(state->start_tag) + 1;
-  if (tag_length >= TREE_SITTER_SERIALIZATION_BUFFER_SIZE) {
-    return 0;
-  }
-
-  memcpy(buffer, state->start_tag, tag_length);
-  if (state->start_tag != NULL) {
-    free(state->start_tag);
-    state->start_tag = NULL;
-  }
-  return tag_length;
+  (*buffer)[(*length)++] = byte;
+  return true;
 }
 
-void tree_sitter_sql_external_scanner_deserialize(void *payload, const char *buffer, unsigned length) {
-  LexerState *state = (LexerState *)payload;
-  state->start_tag = NULL;
-  // A length of 1 can't exists.
-  if (length > 1) {
-    state->start_tag = malloc(length);
-    memcpy(state->start_tag, buffer, length);
+static bool scan_dollar_quoted_string(TSLexer *lexer) {
+  if (lexer->lookahead != '$') return false;
+  lexer->advance(lexer, false);
+
+  char *tag = NULL;
+  size_t tag_length = 0;
+  size_t tag_capacity = 0;
+  if (lexer->lookahead == '$') {
+    lexer->advance(lexer, false);
+  } else {
+    if (!is_ascii_alpha(lexer->lookahead) && lexer->lookahead != '_') {
+      return false;
+    }
+    while (is_ascii_alpha(lexer->lookahead) ||
+           is_ascii_digit(lexer->lookahead) || lexer->lookahead == '_') {
+      if (!append_byte(&tag, &tag_length, &tag_capacity,
+                       (char)lexer->lookahead)) {
+        free(tag);
+        return false;
+      }
+      lexer->advance(lexer, false);
+    }
+    if (lexer->lookahead != '$') {
+      free(tag);
+      return false;
+    }
+    lexer->advance(lexer, false);
   }
+
+  size_t delimiter_length = tag_length + 2;
+  char *delimiter = malloc(delimiter_length);
+  size_t *prefix = calloc(delimiter_length, sizeof(size_t));
+  if (delimiter == NULL || prefix == NULL) {
+    free(tag);
+    free(delimiter);
+    free(prefix);
+    return false;
+  }
+  delimiter[0] = '$';
+  for (size_t index = 0; index < tag_length; index++) {
+    delimiter[index + 1] = tag[index];
+  }
+  delimiter[delimiter_length - 1] = '$';
+  free(tag);
+
+  for (size_t index = 1, matched = 0; index < delimiter_length; index++) {
+    while (matched > 0 && delimiter[index] != delimiter[matched]) {
+      matched = prefix[matched - 1];
+    }
+    if (delimiter[index] == delimiter[matched]) matched++;
+    prefix[index] = matched;
+  }
+
+  size_t matched = 0;
+  while (!lexer->eof(lexer)) {
+    int32_t codepoint = lexer->lookahead;
+    lexer->advance(lexer, false);
+    while (matched > 0 &&
+           (codepoint > 0x7f || (char)codepoint != delimiter[matched])) {
+      matched = prefix[matched - 1];
+    }
+    if (codepoint <= 0x7f && (char)codepoint == delimiter[matched]) matched++;
+    if (matched == delimiter_length) {
+      free(delimiter);
+      free(prefix);
+      lexer->mark_end(lexer);
+      lexer->result_symbol = DOLLAR_QUOTED_STRING;
+      return true;
+    }
+  }
+
+  free(delimiter);
+  free(prefix);
+  return false;
+}
+
+void *tree_sitter_avenger_sql_external_scanner_create(void) { return NULL; }
+
+void tree_sitter_avenger_sql_external_scanner_destroy(void *payload) {
+  (void)payload;
+}
+
+unsigned tree_sitter_avenger_sql_external_scanner_serialize(void *payload,
+                                                            char *buffer) {
+  (void)payload;
+  (void)buffer;
+  return 0;
+}
+
+void tree_sitter_avenger_sql_external_scanner_deserialize(
+    void *payload, const char *buffer, unsigned length) {
+  (void)payload;
+  (void)buffer;
+  (void)length;
+}
+
+bool tree_sitter_avenger_sql_external_scanner_scan(
+    void *payload, TSLexer *lexer, const bool *valid_symbols) {
+  (void)payload;
+  while (is_avenger_whitespace(lexer->lookahead)) {
+    lexer->advance(lexer, true);
+  }
+  if (valid_symbols[LINE_COMMENT] && lexer->lookahead == '-') {
+    return scan_line_comment(lexer);
+  }
+  if (valid_symbols[BLOCK_COMMENT] && lexer->lookahead == '/') {
+    return scan_block_comment(lexer);
+  }
+  if (valid_symbols[DOLLAR_QUOTED_STRING] && lexer->lookahead == '$') {
+    return scan_dollar_quoted_string(lexer);
+  }
+  return false;
 }

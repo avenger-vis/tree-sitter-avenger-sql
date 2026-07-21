@@ -1,87 +1,102 @@
-# tree-sitter-sql
+# tree-sitter-avenger-sql
 
-[![Build/test](https://github.com/derekstride/tree-sitter-sql/actions/workflows/ci.yml/badge.svg)](https://github.com/derekstride/tree-sitter-sql/actions/workflows/ci.yml)
-[![GitHub Pages](https://github.com/DerekStride/tree-sitter-sql/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/DerekStride/tree-sitter-sql/actions/workflows/gh-pages.yml)
-[![npm package version](https://img.shields.io/npm/v/%40derekstride/tree-sitter-sql?logo=npm&color=brightgreen)](https://www.npmjs.com/package/@derekstride/tree-sitter-sql)
+`tree-sitter-avenger-sql` is the reusable Tree-sitter base grammar for
+Avenger's read-only SQL queries and scalar expressions. It supports standard
+and `FROM`-first queries, DataFusion-oriented expressions, `$binding.path`
+references, temporal qualifiers such as `@start`, and Avenger's shared lexical
+contract.
 
+This is a tolerant editor parser, not the language validator. A clean syntax
+tree does not prove that a query resolves, type-checks, or is supported by
+DataFusion. `AvengerSqlDialect`, the Avenger compiler, and DataFusion planning
+remain authoritative.
 
-A general/permissive SQL grammar for [tree-sitter](https://github.com/tree-sitter/tree-sitter).
+The grammar is an aggressively trimmed, attributed fork of
+`DerekStride/tree-sitter-sql`. See [UPSTREAM.md](UPSTREAM.md) for the immutable
+base revision, measurements, pruning inventory, and selective-rebase policy.
 
-## Installation
+## Scope
 
-**We don't commit the generated parser files to the `main` branch.** Instead, you can find them on the
-[gh-pages](https://github.com/DerekStride/tree-sitter-sql/tree/gh-pages) branch. We're open to feedback & encourage you
-to [open an issue](https://github.com/DerekStride/tree-sitter-sql/issues/new) to discuss any problems.
+The standalone root parses exactly one query or scalar expression, with an
+optional final semicolon. Reusable `_query` and `_expression` rules deliberately
+exclude that terminator so `tree-sitter-avenger` can inherit them at DSL island
+boundaries.
 
-They are also hosted on the [GitHub pages site](https://derek.stride.host/tree-sitter-sql/) and available for download
-here:
-[github://derekstride/tree-sitter-sql/gh-pages.tar.gz](https://github.com/DerekStride/tree-sitter-sql/archive/refs/heads/gh-pages.tar.gz).
+Supported syntax includes:
 
-*Plugin maintainers ensure to specify the `HEAD` (or a specific revision) of the `gh-pages` branch when integrating
-with this project.*
+- read-only `SELECT`, `WITH`, `VALUES`, and set queries;
+- standard `SELECT ... FROM ...` and `FROM ... SELECT ...` source order;
+- relations, aliases, joins, filters, grouping, windows, ordering, and limits;
+- literals, calls, casts, arrays, structs, subqueries, predicates, and operators;
+- `$binding.path`, adjacent `@start`/`@previous`, JSON access, and store relations.
 
-### Step 1: Download the parser files
+DDL, writes, transactions, administration, procedures, and general vendor SQL
+are intentionally absent. Unsupported input still produces a useful recovery
+tree for editors.
 
-**Using `git`**
-```bash
-git clone https://github.com/DerekStride/tree-sitter-sql.git
-cd tree-sitter-sql
-git checkout gh-pages
+## Examples
+
+```sql
+FROM vega.movies AS m
+SELECT m."title", CAST(m."rating" AS DOUBLE)
+WHERE m."rating" >= $minimum
 ```
 
-**Using `curl`**
-```bash
-curl -LO https://github.com/DerekStride/tree-sitter-sql/archive/refs/heads/gh-pages.tar.gz
-tar -xzf gh-pages.tar.gz
-cd tree-sitter-sql-gh-pages
-```
-
-### Step 2: Compile the Parser
-
-Tree-sitter parsers need to be compiled as a shared-object / dynamic-library, you can enable this by passing the
-`-shared` & `-fPIC` flags to your compiler.
-
-```bash
-cc -shared -fPIC -I./src src/parser.c src/scanner.c -o sql.so
-```
-
-### Using [cargo](https://crates.io/crates/tree-sitter-sequel)
-
-```bash
-cargo add tree-sitter-sequel
-```
-
-### Using [npm](https://www.npmjs.com/package/@derekstride/tree-sitter-sql)
-
-```bash
-npm i @derekstride/tree-sitter-sql
-```
-
-### Using [pip](https://pypi.org/project/tree-sitter-sql/0.3.5/)
-
-```bash
-pip install tree-sitter-sql
+```sql
+$config@previous:theme.color
 ```
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for documentation on how to set up the project for development.
+Tree-sitter CLI 0.26.3 is pinned in `package-lock.json`.
 
-## Features
+```sh
+npm ci
+npm run generate
+npm test
+npm run test:highlights
+npm run check-generated
+npm run build:wasm
+npm run measure -- --check
+cargo test --release
+```
 
-For a complete list of features see the the [tests](test/corpus)
+To check the synchronized compiler-owned conformance manifest against a local
+Avenger checkout:
 
-## References
+```sh
+npm run sync-conformance -- \
+  --avenger-root /path/to/avenger \
+  --check
+```
 
-* [Wikipedia#SQL_syntax](https://en.wikipedia.org/wiki/SQL_syntax) - I consulted wikipedia for naming conventions,
-  though I may not have been strict early on in the prototyping.
-* [Phoenix Language Reference](https://forcedotcom.github.io/phoenix/index.html) - A reference diagram.
-* [SQLite's railroad diagram for expr](https://www.sqlite.org/lang_expr.html) - Another reference diagram.
-* [Postgresql syntax documentation](https://www.postgresql.org/docs/current/sql-commands.html)
-* [Mariadb syntax documentation](https://mariadb.com/kb/en/sql-statements-structure/)
+Generated `src/parser.c`, `src/grammar.json`, `src/node-types.json`, and parser
+headers are committed. Never hand-edit them or accept corpus updates without
+reviewing each changed S-expression.
 
-### Other projects
+## Using the grammar as a base
 
-* https://github.com/m-novikov/tree-sitter-sql
-* https://github.com/tjdevries/tree-sitter-sql
-* https://github.com/dhcmrlchtdj/tree-sitter-sqlite
+The package's default export is the normal Tree-sitter grammar object:
+
+```js
+import AvengerSql from "@avenger-vis/tree-sitter-avenger-sql";
+
+export default grammar(AvengerSql, {
+  name: "derived_language",
+  rules: {
+    source_file: $ => $.query_wrapper,
+    query_wrapper: $ => seq("query", "{", $._query, "}"),
+  },
+});
+```
+
+Consumers must pin an immutable revision. If a derived grammar needs a physical
+scanner or highlight copy, it must synchronize that file with revision and hash
+metadata rather than using an undeclared sibling path.
+
+## Compatibility
+
+Before 1.0, named nodes and fields may change when the Avenger language contract
+changes. Such changes require reviewed corpus updates, regenerated
+`node-types.json`, and downstream composition verification. Patch releases must
+not silently change the public node contract.

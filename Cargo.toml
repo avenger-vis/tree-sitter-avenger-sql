@@ -1,18 +1,29 @@
 [package]
-name = "tree-sitter-sequel"
-description = "Tree-sitter Grammar for SQL"
-version = "0.3.11"
-authors = ["derek stride"]
+name = "tree-sitter-avenger-sql"
+description = "Tree-sitter grammar for Avenger SQL queries and expressions"
+version = "0.1.0"
+authors = ["Avenger contributors", "Derek Stride"]
 license = "MIT"
 readme = "README.md"
-keywords = ["incremental", "parsing", "tree-sitter", "sql"]
+keywords = ["avenger", "incremental", "parsing", "sql", "tree-sitter"]
 categories = ["parsing", "text-editors"]
-repository = "https://github.com/derekstride/tree-sitter-sql.git"
+repository = "https://github.com/avenger-vis/tree-sitter-avenger-sql"
 edition = "2021"
+rust-version = "1.82"
 autoexamples = false
-
 build = "bindings/rust/build.rs"
-include = ["/LICENSE", "bindings/rust/*", "grammar*", "queries/*", "src/*"]
+include = [
+  "/LICENSE",
+  "/README.md",
+  "/bindings/c/**",
+  "/bindings/rust/**",
+  "/grammar.js",
+  "/grammar/**",
+  "/queries/**",
+  "/src/**",
+  "/tree-sitter.json",
+  "/UPSTREAM.md",
+]
 
 [lib]
 path = "bindings/rust/lib.rs"
@@ -21,7 +32,9 @@ path = "bindings/rust/lib.rs"
 tree-sitter-language = "0.1"
 
 [build-dependencies]
-cc = "~1.2.1"
+cc = "1.2"
 
 [dev-dependencies]
-tree-sitter = "~0.25.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tree-sitter = "0.26.3"

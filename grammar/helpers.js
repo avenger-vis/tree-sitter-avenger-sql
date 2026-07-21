@@ -1,39 +1,24 @@
-export function make_keyword(word) {
-  let str = "";
-  for (var i = 0; i < word.length; i++) {
-    str = str + "[" + word.charAt(i).toLowerCase() + word.charAt(i).toUpperCase() + "]";
-  }
-  return new RegExp(str);
+export function caseInsensitive(word) {
+  return new RegExp(
+    word
+      .split("")
+      .map(character => {
+        const lower = character.toLowerCase();
+        const upper = character.toUpperCase();
+        return lower === upper ? character : `[${lower}${upper}]`;
+      })
+      .join(""),
+  );
 }
 
-export function optional_parenthesis(node) {
-  return prec.right(
-    choice(
-      node,
-      wrapped_in_parenthesis(node),
-    ),
-  )
+export function commaSep1(rule) {
+  return seq(rule, repeat(seq(",", rule)));
 }
 
-export function wrapped_in_parenthesis(node) {
-  if (node) {
-    return seq("(", node, ")");
-  }
-  return seq("(", ")");
+export function commaSep(rule) {
+  return optional(commaSep1(rule));
 }
 
-export function comma_list(field, requireFirst) {
-  let sequence = seq(field, repeat(seq(',', field)));
-
-  if (requireFirst) {
-    return sequence;
-  }
-
-  return optional(sequence);
-}
-
-export function paren_list(field, requireFirst) {
-  return wrapped_in_parenthesis(
-    comma_list(field, requireFirst),
-  )
+export function parenthesized(rule) {
+  return seq("(", rule, ")");
 }

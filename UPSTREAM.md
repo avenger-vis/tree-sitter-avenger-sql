@@ -46,7 +46,7 @@ therefore removes those families physically rather than leaving them dormant.
 | `grammar/expressions.js` | adapt heavily | retain useful expression structure; replace lexical forms, parameters, operators, types, and vendor expressions |
 | `grammar/statements/select.js` | adapt heavily and split | retain read-query/relation/window structure; remove `INTO`, hints, vendor clauses, and write paths; add `FROM`-first |
 | `grammar/helpers.js` | retain selectively | keep reviewed list/parenthesis helpers |
-| `grammar/column-lists.js` | retain selectively | keep only helpers reached by read queries |
+| `grammar/column-lists.js` | remove | no retained read rule reaches its DDL-oriented helpers |
 | `grammar/types.js` | replace | narrow to DataFusion cast types used by the executable corpus |
 | `grammar/keywords.js` | replace/narrow | keep only the transitive closure of retained query/expression rules |
 | `grammar/transactions.js` | remove | transactions are outside Avenger SQL |
@@ -79,6 +79,25 @@ therefore removes those families physically rather than leaving them dormant.
 Rule-level refinements are recorded in this table as implementation proceeds.
 A removed family must not survive as an import, unreachable choice, keyword,
 conflict, external token, scanner branch, capture, test, or generated node.
+
+## Baseline and toolchain record
+
+All measurements below were taken on macOS arm64 with Tree-sitter CLI 0.26.3
+(ABI 15). The upstream parser generated in 92.13 seconds, passed its own corpus,
+and built to Wasm successfully. Its generated shape was 30,622 states, 5,243
+large states, 770 symbols, 429 tokens, 53 fields, and a 41,602,006-byte
+`parser.c`. The only generation warning was an unnecessary conflict between
+`field` and `_qualified_field`.
+
+The historical combined `tree-sitter-avenger` parser at
+`2661a76a1796b34b0c16afb5fed35cc81e45b807` used ABI 15, 4,686 states, 16
+large states, 346 symbols, 196 tokens, 88 fields, and a 4,750,682-byte
+`parser.c`. Machine-readable upstream and current records live in
+`test/metrics/`.
+
+The initial package surface is JavaScript grammar composition, committed C
+sources/header, a minimal Rust binding and test harness, and a Wasm build check.
+The grammar does not ship native Node, Go, Python, or Swift bindings.
 
 ## Rebase policy
 

@@ -1,37 +1,28 @@
 {
   "grammars": [
     {
-      "name": "sql",
-      "camelcase": "SQL",
-      "scope": "source.sql",
+      "name": "avenger_sql",
+      "camelcase": "AvengerSql",
+      "scope": "source.avenger-sql",
       "path": ".",
-      "file-types": [
-        "sql"
-      ],
-      "highlights": [
-        "queries/highlights.scm"
-      ]
+      "file-types": ["avenger.sql"],
+      "highlights": ["queries/highlights.scm"]
     }
   ],
   "metadata": {
-    "version": "0.3.11",
+    "version": "0.1.0",
     "license": "MIT",
-    "description": "Tree-sitter Grammar for SQL",
+    "description": "Tree-sitter grammar for Avenger SQL queries and expressions",
     "authors": [
-      {
-        "name": "derek stride"
-      }
+      { "name": "Avenger contributors" },
+      { "name": "Derek Stride" }
     ],
     "links": {
-      "repository": "git+https://github.com/derekstride/tree-sitter-sql.git"
+      "repository": "https://github.com/avenger-vis/tree-sitter-avenger-sql"
     }
   },
   "bindings": {
     "c": true,
-    "go": true,
-    "node": true,
-    "python": true,
-    "rust": true,
-    "swift": true
+    "rust": true
   }
 }

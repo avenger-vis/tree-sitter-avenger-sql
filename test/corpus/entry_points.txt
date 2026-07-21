@@ -1,0 +1,125 @@
+================================================================================
+Scalar expression root
+================================================================================
+
+1 + 2
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (binary_expression
+    (literal
+      (number))
+    (literal
+      (number))))
+
+================================================================================
+Read query root
+================================================================================
+
+SELECT 1;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (query
+    (select_query
+      (select_clause
+        (keyword_select)
+        (projection
+          (select_item
+            (literal
+              (number))))))))
+
+================================================================================
+Values query root
+================================================================================
+
+VALUES (1, 'one'), (2, 'two')
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (query
+    (values_query
+      (keyword_values)
+      (values_row
+        (literal
+          (number))
+        (literal
+          (single_quoted_string)))
+      (values_row
+        (literal
+          (number))
+        (literal
+          (single_quoted_string))))))
+
+================================================================================
+Scalar subquery root
+================================================================================
+
+(SELECT 1)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (subquery_expression
+    (query
+      (select_query
+        (select_clause
+          (keyword_select)
+          (projection
+            (select_item
+              (literal
+                (number)))))))))
+
+================================================================================
+Multiple statements are not a valid root
+================================================================================
+
+SELECT 1; SELECT 2
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (ERROR
+    (query
+      (select_query
+        (select_clause
+          (keyword_select)
+          (projection
+            (select_item
+              (literal
+                (number))))))))
+  (query
+    (select_query
+      (select_clause
+        (keyword_select)
+        (projection
+          (select_item
+            (literal
+              (number))))))))
+
+================================================================================
+DDL is recovery only
+================================================================================
+
+CREATE TABLE t (x INT)
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_call
+    (qualified_name
+      (name
+        (identifier)))
+    (ERROR
+      (identifier)
+      (identifier))
+    (function_argument
+      (qualified_name
+        (name
+          (identifier))))
+    (ERROR
+      (keyword_in)
+      (identifier))))
