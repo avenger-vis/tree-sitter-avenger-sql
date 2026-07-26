@@ -96,7 +96,7 @@ export default {
     field("projection", $.projection),
   ),
 
-  projection: $ => commaSep1($.select_item),
+  projection: $ => seq(commaSep1($.select_item), optional(",")),
 
   select_item: $ => seq(
     field("value", choice($.wildcard, $._expression)),
