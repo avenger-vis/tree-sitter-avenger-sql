@@ -1,4 +1,49 @@
 ================================================================================
+Contextual datum field shape
+================================================================================
+
+datum."a""b"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (qualified_name
+    (name
+      (identifier))
+    (name
+      (quoted_identifier))))
+
+================================================================================
+Ordinary query aliases may use datum
+================================================================================
+
+SELECT datum."id" FROM input AS datum
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (query
+    (select_query
+      (select_clause
+        (keyword_select)
+        (projection
+          (select_item
+            (qualified_name
+              (name
+                (identifier))
+              (name
+                (quoted_identifier))))))
+      (from_clause
+        (keyword_from)
+        (relation
+          (qualified_name
+            (name
+              (identifier)))
+          (relation_alias
+            (keyword_as)
+            (identifier)))))))
+
+================================================================================
 Aggregate filter and window
 ================================================================================
 

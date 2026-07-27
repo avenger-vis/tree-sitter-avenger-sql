@@ -1,9 +1,9 @@
 {
   "synchronization": {
     "source_repository": "https://github.com/jonmmease/avenger",
-    "source_revision": "3565e1f90ef5c48b3f6449c07d3824137543c320",
+    "source_revision": "5a01e969bd15a3c3e8ff27703a3469e36a74ab5a",
     "source_path": "avenger-lang-core/tests/fixtures/tokens/tree_sitter_conformance.json",
-    "content_sha256": "7379a1a3d5bde46c6c0e4a1c79cc76c7139a1476243a8d84d94cbcf1314b1e77"
+    "content_sha256": "e45dbac308642ab175720b4d891a4e0826d470098b56d15318e0081d99fdeec6"
   },
   "manifest": {
     "schema_version": 1,
@@ -80,6 +80,13 @@
         "category": "identifier",
         "stage": "expression",
         "source": "\"a\"\"b\"",
+        "accepted": true
+      },
+      {
+        "id": "datum_qualified_quoted_identifier",
+        "category": "identifier",
+        "stage": "expression",
+        "source": "datum.\"a\"\"b\"",
         "accepted": true
       },
       {
