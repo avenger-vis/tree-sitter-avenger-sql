@@ -1,7 +1,7 @@
 {
   "synchronization": {
-    "source_repository": "https://github.com/avenger-vis/avenger",
-    "source_revision": "b0eb9f85abe8b3a091b4d5768f3a6dffb5fae60d",
+    "source_repository": "https://github.com/jonmmease/avenger",
+    "source_revision": "3565e1f90ef5c48b3f6449c07d3824137543c320",
     "source_path": "avenger-lang-core/tests/fixtures/tokens/tree_sitter_conformance.json",
     "content_sha256": "7379a1a3d5bde46c6c0e4a1c79cc76c7139a1476243a8d84d94cbcf1314b1e77"
   },

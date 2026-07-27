@@ -76,8 +76,8 @@ jobs:
           path: tree-sitter-avenger-sql
       - uses: actions/checkout@v4
         with:
-          repository: avenger-vis/avenger
-          ref: b0eb9f85abe8b3a091b4d5768f3a6dffb5fae60d
+          repository: jonmmease/avenger
+          ref: 3565e1f90ef5c48b3f6449c07d3824137543c320
           path: avenger
       - uses: actions/setup-node@v4
         with:

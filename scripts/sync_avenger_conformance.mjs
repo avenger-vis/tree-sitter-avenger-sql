@@ -19,7 +19,7 @@ const sourceRevision = execFileSync("git", ["-C", avengerRoot, "rev-parse", "HEA
 }).trim();
 const synchronized = {
   synchronization: {
-    source_repository: "https://github.com/avenger-vis/avenger",
+    source_repository: "https://github.com/jonmmease/avenger",
     source_revision: sourceRevision,
     source_path: relativeSource,
     content_sha256: createHash("sha256").update(sourceBytes).digest("hex"),
