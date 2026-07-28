@@ -14,6 +14,135 @@ datum."a""b"
       (quoted_identifier))))
 
 ================================================================================
+Contextual property-access families remain ordinary SQL shapes
+================================================================================
+
+[
+  channel.x,
+  EVENT.COORD.X,
+  event.coord.x,
+  event.start.coord.x,
+  event.domain.x.start,
+  event.domain.x.end,
+  event.path,
+  event.facet[1],
+  event.legend.value,
+  item.channel.x,
+  item.data."display label",
+  item.bbox.top,
+  viewport.x.pixels,
+  viewport.y.domain.start
+]
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (array_expression
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (subscript_expression
+      (qualified_name
+        (name
+          (identifier))
+        (name
+          (identifier)))
+      (literal
+        (number)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (quoted_identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))
+    (qualified_name
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier))
+      (name
+        (identifier)))))
+
+================================================================================
 Ordinary query aliases may use datum
 ================================================================================
 

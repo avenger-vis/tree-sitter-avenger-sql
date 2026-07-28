@@ -70,6 +70,40 @@
       "final": "SELECT m.x, m.y FROM movies m"
     },
     {
+      "id": "complete_contextual_channel",
+      "initial": "event.coord.",
+      "edits": [
+        {
+          "start_byte": 12,
+          "old_end_byte": 12,
+          "new_text": "x",
+          "start_point": [0, 12],
+          "old_end_point": [0, 12],
+          "new_end_point": [0, 13],
+          "expected_clean": true,
+          "max_changed_bytes": 32
+        }
+      ],
+      "final": "event.coord.x"
+    },
+    {
+      "id": "complete_contextual_facet_subscript",
+      "initial": "event.facet[",
+      "edits": [
+        {
+          "start_byte": 12,
+          "old_end_byte": 12,
+          "new_text": "1]",
+          "start_point": [0, 12],
+          "old_end_point": [0, 12],
+          "new_end_point": [0, 14],
+          "expected_clean": true,
+          "max_changed_bytes": 32
+        }
+      ],
+      "final": "event.facet[1]"
+    },
+    {
       "id": "multiline_quote_close_reopen",
       "initial": "'line one\nline two'",
       "edits": [
