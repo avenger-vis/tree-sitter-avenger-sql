@@ -106,10 +106,14 @@
 (common_table_expression name: (identifier) @type)
 (common_table_expression name: (quoted_identifier) @type)
 
+; Treat a binding sigil and every identifier in its path as one semantic family.
+; `variable.special` is preferred when a theme defines it; `variable.parameter`
+; is the fallback used by themes such as Ayu Dark.
 (binding_reference
-  "$" @punctuation.special
-  root: (identifier) @variable.special)
-(binding_reference member: (identifier) @property)
+  "$" @variable.parameter @variable.special
+  root: (identifier) @variable.parameter @variable.special)
+(binding_reference
+  member: (identifier) @variable.parameter @variable.special)
 (json_access_expression member: (identifier) @property)
 (temporal_qualifier) @attribute
 
