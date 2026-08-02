@@ -35,8 +35,7 @@ fn highlight_query_captures_the_public_surface() {
         ("string.special", "\"label\""),
         ("variable.special", "\"label\""),
         ("variable.parameter", "$"),
-        ("variable.special", "$"),
-        ("variable.special", "config"),
+        ("variable.parameter", "config"),
         ("attribute", "@previous"),
         ("property", "theme"),
         ("string.escape", "E'line\\nnext'"),
@@ -49,6 +48,12 @@ fn highlight_query_captures_the_public_surface() {
         assert!(
             observed.contains(&expected),
             "missing capture {expected:?}; observed: {observed:#?}"
+        );
+    }
+    for binding_part in ["$", "config"] {
+        assert!(
+            !observed.contains(&("variable.special", binding_part)),
+            "binding component {binding_part:?} must match its parameter declaration"
         );
     }
 }
