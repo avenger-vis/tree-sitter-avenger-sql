@@ -32,7 +32,7 @@ fn highlight_query_captures_the_public_surface() {
         ("type", "vega"),
         ("variable.parameter", "m"),
         ("function", "sum"),
-        ("variable", "\"label\""),
+        ("property", "\"label\""),
         ("variable.parameter", "$"),
         ("variable.special", "$"),
         ("variable.special", "config"),
@@ -44,6 +44,46 @@ fn highlight_query_captures_the_public_surface() {
         ("number", "1.5"),
         ("operator", ">="),
         ("punctuation.delimiter", "."),
+    ] {
+        assert!(
+            observed.contains(&expected),
+            "missing capture {expected:?}; observed: {observed:#?}"
+        );
+    }
+}
+
+#[test]
+fn quoted_identifiers_retain_contextual_roles() {
+    let source = r#"SELECT "amount" AS "label" FROM "my table" AS "t""#;
+    let language = tree_sitter_avenger_sql::LANGUAGE.into();
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&language).unwrap();
+    let tree = parser.parse(source, None).unwrap();
+    assert!(
+        !tree.root_node().has_error(),
+        "{}",
+        tree.root_node().to_sexp()
+    );
+
+    let query = Query::new(&language, tree_sitter_avenger_sql::HIGHLIGHTS_QUERY)
+        .expect("highlight query must compile");
+    let capture_names = query.capture_names();
+    let mut cursor = QueryCursor::new();
+    let mut captures = cursor.captures(&query, tree.root_node(), source.as_bytes());
+    let mut observed = HashSet::new();
+    while let Some((query_match, capture_index)) = captures.next() {
+        let capture = query_match.captures[*capture_index];
+        observed.insert((
+            capture_names[capture.index as usize],
+            &source[capture.node.byte_range()],
+        ));
+    }
+
+    for expected in [
+        ("property", "\"amount\""),
+        ("variable.parameter", "\"label\""),
+        ("type", "\"my table\""),
+        ("variable.parameter", "\"t\""),
     ] {
         assert!(
             observed.contains(&expected),
