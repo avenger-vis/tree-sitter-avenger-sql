@@ -32,7 +32,8 @@ fn highlight_query_captures_the_public_surface() {
         ("type", "vega"),
         ("variable.parameter", "m"),
         ("function", "sum"),
-        ("property", "\"label\""),
+        ("string.special", "\"label\""),
+        ("variable.special", "\"label\""),
         ("variable.parameter", "$"),
         ("variable.special", "$"),
         ("variable.special", "config"),
@@ -80,7 +81,8 @@ fn quoted_identifiers_retain_contextual_roles() {
     }
 
     for expected in [
-        ("property", "\"amount\""),
+        ("string.special", "\"amount\""),
+        ("variable.special", "\"amount\""),
         ("variable.parameter", "\"label\""),
         ("type", "\"my table\""),
         ("variable.parameter", "\"t\""),
