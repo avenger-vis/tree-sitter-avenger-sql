@@ -4,12 +4,6 @@ on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      cross_repo:
-        description: Check synchronized fixtures against the unpublished Avenger source revision
-        required: false
-        type: boolean
-        default: false
   schedule:
     - cron: "23 6 * * 1"
 
@@ -28,9 +22,27 @@ jobs:
       - run: npm ci
       - run: npm run check-generated
       - run: npm test
-      - run: npm run test:highlights
       - run: npm run measure -- --check
       - run: npm pack --dry-run
+
+  keywords:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tree-sitter-avenger-sql
+      - uses: actions/checkout@v4
+        with:
+          repository: jonmmease/avenger
+          ref: df17e4f2f7c1819419222475d301957785d4961c
+          path: avenger
+          sparse-checkout: avenger-sql-syntax/src/syntax_kind.rs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - working-directory: tree-sitter-avenger-sql
+        run: node scripts/sync_keywords.mjs --avenger-root ../avenger --check
 
   rust:
     strategy:
@@ -66,28 +78,6 @@ jobs:
       - run: npm ci
       - run: npm run build:wasm
       - run: npm run test:wasm
-
-  compiler-conformance:
-    if: github.event_name == 'workflow_dispatch' && inputs.cross_repo
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: tree-sitter-avenger-sql
-      - uses: actions/checkout@v4
-        with:
-          repository: jonmmease/avenger
-          ref: 3565e1f90ef5c48b3f6449c07d3824137543c320
-          path: avenger
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: tree-sitter-avenger-sql/package-lock.json
-      - working-directory: tree-sitter-avenger-sql
-        run: npm ci
-      - working-directory: tree-sitter-avenger-sql
-        run: npm run sync-conformance -- --avenger-root ../avenger --check
 
   fuzz:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

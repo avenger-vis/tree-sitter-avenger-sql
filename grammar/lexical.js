@@ -1,64 +1,53 @@
-const IDENTIFIER = /[_\p{Alphabetic}][_\p{Alphabetic}0-9]*/;
+// The lexical layer: names, numbers, query parameters, comments, hints, and the strings and
+// bytes literals that the external scanner reads. It follows avenger-sql-syntax's lexer.
 
 export default {
-  // Reserve sqlparser's unsupported Unicode-string token as one lexical unit.
-  // The impossible trailing sentinel makes it an intentional recovery path,
-  // rather than allowing `U&'text'` to look like a valid bitwise expression.
-  _unsupported_unicode_string: _ => seq(
-    token(prec(100, /[uU]&'([^']|'')*'/)),
-    token.immediate("\u{10ffff}"),
-  ),
+  // A word that is not a keyword where the parser reads it. A keyword that the grammar reads
+  // as a name is also an `identifier` (`kwAsName`).
+  identifier: _ => /[A-Za-z_][A-Za-z0-9_]*/,
 
-  // These hidden productions keep an unterminated quote local to its current
-  // line during editing. The impossible sentinel deliberately yields a
-  // MISSING/error node; a complete multiline token always wins by length.
-  _unterminated_quoted_literal: _ => seq(
-    token(prec(-10, choice(
-      /'[^'\n\r;,{}\]]*/,
-      /[eE]'([^'\\\n\r;,{}\]]|\\[^\n\r])*/,
-      /[xX]'[0-9A-Fa-f]*/,
-    ))),
-    token.immediate("\u{10ffff}"),
-  ),
+  // A name in backticks, with backslash escapes.
+  quoted_identifier: _ => /`([^`\\\r\n]|\\.)*`/,
 
-  identifier: _ => IDENTIFIER,
+  // A field's name that starts with a digit, which is a name only after a field's `.`, as in
+  // `t.2023`.
+  _digit_name: _ => /[0-9][A-Za-z0-9_]*/,
 
-  quoted_identifier: _ => choice(
-    token(/""/),
-    token(/"[^"\n\r]([^"\n\r]|"")*"/),
-  ),
+  integer: _ => token(choice(/[0-9]+/, /0[xX][0-9A-Fa-f]+/)),
 
-  number: _ => token(
-    /((([0-9]+\.[0-9]*)|(\.[0-9]+)|([0-9]+))([eE][+-]?[0-9]+)?L?)/,
-  ),
+  // `1.`, `.5`, `1.5`, and an exponent, as in `1e10` or `1.5E-3`.
+  float: _ =>
+    token(
+      choice(
+        /[0-9]+\.[0-9]*([eE][+-]?[0-9]+)?/,
+        /\.[0-9]+([eE][+-]?[0-9]+)?/,
+        /[0-9]+[eE][+-]?[0-9]+/,
+      ),
+    ),
 
-  single_quoted_string: _ => choice(
-    token(/''/),
-    token(/'[^']([^']|'')*'/),
-  ),
+  // `@name`, `@ name`, or `@` and a name in backticks.
+  param: _ => /@[ \t\r\n]*([A-Za-z_][A-Za-z0-9_]*|`([^`\\\r\n]|\\.)*`)/,
 
-  escaped_string: _ => choice(
-    token(/[eE]''/),
-    token(/[eE]'([^'\\]|\\[^\n\r]|\\\r?\n)([^'\\]|\\[^\n\r]|\\\r?\n|'')*'/),
-  ),
+  // `--` or `#` to the end of the line, or `/* */` without nesting.
+  comment: _ =>
+    token(
+      choice(
+        seq("--", /[^\r\n]*/),
+        seq("#", /[^\r\n]*/),
+        seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/"),
+      ),
+    ),
 
-  hex_binary_literal: _ => token(/[xX]'[0-9A-Fa-f]*'/),
+  // `--|` to the end of the line: a doc comment, which documents the definition after it, or at
+  // the top of a `.qmd` cell, a cell option. It wins over `comment` by its precedence.
+  doc_comment: _ => token(prec(1, seq("--|", /[^\r\n]*/))),
 
-  literal: $ => choice(
-    $.number,
-    $.single_quoted_string,
-    $.escaped_string,
-    $.dollar_quoted_string,
-    $.hex_binary_literal,
-    $.keyword_true,
-    $.keyword_false,
-    $.keyword_null,
-  ),
+  // A hint, `@{...}` or `@` and digits, which avenger-sql reports as unsupported.
+  hint: _ => token(choice(/@\{[^}]*\}/, /@[0-9]+/)),
 
-  name: $ => choice($.identifier, $.quoted_identifier),
-
-  qualified_name: $ => prec.right(seq(
-    field("name", $.name),
-    repeat(seq(".", field("member", $.name))),
-  )),
+  // A string or bytes literal: a start (the prefix and the opening quotes), its content, and
+  // its end, all from the external scanner.
+  string: $ => seq($._string_start, optional($.string_content), $._string_end),
+  bytes: $ => seq($._bytes_start, optional($.string_content), $._string_end),
+  string_content: $ => repeat1(choice($._string_chars, $.escape_sequence)),
 };

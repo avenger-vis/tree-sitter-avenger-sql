@@ -1,0 +1,119 @@
+========================================================================
+An empty file
+========================================================================
+
+
+
+---
+
+(source_file)
+
+========================================================================
+Statements with and without semicolons
+========================================================================
+
+FROM a |> SELECT x;
+FROM b |> SELECT y
+FROM c;
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier))))))))
+
+========================================================================
+A module
+========================================================================
+
+MODULE stats.helpers;
+FROM t |> SELECT a
+
+---
+
+(source_file
+  (module
+    (module_stmt
+      (path
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Aliases and trailing commas
+========================================================================
+
+FROM t AS u, |> SELECT a b, c AS d,
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (alias
+            (name
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          (alias
+            (name
+              (identifier))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          (alias
+            (name
+              (identifier))))))))

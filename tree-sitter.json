@@ -5,17 +5,21 @@
       "camelcase": "AvengerSql",
       "scope": "source.avenger-sql",
       "path": ".",
-      "file-types": ["avenger.sql"],
-      "highlights": ["queries/highlights.scm"]
+      "file-types": [
+        "av.sql",
+        "av.sqlm"
+      ],
+      "injection-regex": "^avenger-sql$"
     }
   ],
   "metadata": {
     "version": "0.1.0",
     "license": "MIT",
-    "description": "Tree-sitter grammar for Avenger SQL queries and expressions",
+    "description": "The Tree-sitter grammar of avenger-sql",
     "authors": [
-      { "name": "Avenger contributors" },
-      { "name": "Derek Stride" }
+      {
+        "name": "Jon Mease"
+      }
     ],
     "links": {
       "repository": "https://github.com/avenger-vis/tree-sitter-avenger-sql"

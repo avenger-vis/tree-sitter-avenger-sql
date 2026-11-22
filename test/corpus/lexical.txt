@@ -1,202 +1,477 @@
-================================================================================
-Unicode identifier
-================================================================================
+========================================================================
+Line comments, block comments, and doc comments
+========================================================================
 
-café
+--| Documents the query.
+-- a comment
+# a comment
+/* a
+   block */
+FROM t
 
---------------------------------------------------------------------------------
-
-(source_file
-  (qualified_name
-    (name
-      (identifier))))
-
-================================================================================
-Doubled quote in quoted identifier
-================================================================================
-
-"a""b"
-
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (qualified_name
-    (name
-      (quoted_identifier))))
+  (doc_comment)
+  (comment)
+  (comment)
+  (comment)
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier))))))))
 
-================================================================================
-Ordinary string
-================================================================================
+========================================================================
+Unicode whitespace
+========================================================================
 
-'ordinary '' quote'
+FROM t |>　SELECT a
 
---------------------------------------------------------------------------------
-
-(source_file
-  (literal
-    (single_quoted_string)))
-
-================================================================================
-Escaped string
-================================================================================
-
-E'line\nnext'
-
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (literal
-    (escaped_string)))
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
 
-================================================================================
-Tagged dollar raw string
-================================================================================
+========================================================================
+Hints are extras
+========================================================================
 
-$body$raw $other$ text$body$
+FROM t @{join_method=hash} |> SELECT a
 
---------------------------------------------------------------------------------
-
-(source_file
-  (literal
-    (dollar_quoted_string)))
-
-================================================================================
-Hex binary string
-================================================================================
-
-X'deadbeef'
-
---------------------------------------------------------------------------------
-
-(source_file
-  (literal
-    (hex_binary_literal)))
-
-================================================================================
-Unary sign remains outside number
-================================================================================
-
--0.
-
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (unary_expression
-    (literal
-      (number))))
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (hint)
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
 
-================================================================================
-Decimal exponent
-================================================================================
+========================================================================
+Quoted identifiers
+========================================================================
 
-1.25E+003
+FROM `my table` |> SELECT `a column`, `with \` escape`
 
---------------------------------------------------------------------------------
-
-(source_file
-  (literal
-    (number)))
-
-================================================================================
-Whitespace-sensitive Unicode line comment
-================================================================================
-
-1 -- comment
- + 2
-
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (binary_expression
-    (literal
-      (number))
-    (line_comment)
-    (literal
-      (number))))
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (quoted_identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (quoted_identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (quoted_identifier)))))))))
 
-================================================================================
-Nested block comment
-================================================================================
+========================================================================
+A field name that starts with a digit
+========================================================================
 
-1 /* outer /* inner */ outer */ + 2
+FROM t |> SELECT t.2023, t.`2024`
 
---------------------------------------------------------------------------------
-
-(source_file
-  (binary_expression
-    (literal
-      (number))
-    (block_comment)
-    (literal
-      (number))))
-
-================================================================================
-No-space double dash remains operators
-================================================================================
-
-amount--1
-
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (binary_expression
-    (qualified_name
-      (name
-        (identifier)))
-    (unary_expression
-      (literal
-        (number)))))
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (quoted_identifier)))))))))
 
-================================================================================
-Triple quote is not a supported string family
-================================================================================
+========================================================================
+Integers and floats
+========================================================================
 
-'''multiline'''
+FROM t |> SELECT 1, 0x1F, 0XaB, 1., .5, 1.5, 1e10, 1.5E-3, .5e+2
 
---------------------------------------------------------------------------------
-
-(source_file
-  (literal
-    (single_quoted_string))
-  (ERROR))
-
-================================================================================
-Unicode prefixed string is reserved as invalid
-================================================================================
-
-U&'text'
-
---------------------------------------------------------------------------------
-
-(ERROR)
-
-================================================================================
-Unterminated dollar raw string is not a literal
-================================================================================
-
-$body$raw
-
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (ERROR
-    (binding_reference
-      (identifier)))
-  (binding_reference
-    (identifier)))
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))
+        (select_item
+          (literal
+            (integer)))
+        (select_item
+          (literal
+            (integer)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))))))
 
-================================================================================
-Radix integer is not a number
-================================================================================
+========================================================================
+Query parameters
+========================================================================
 
-0x10
+FROM t |> SELECT @p, @ spaced, @`quoted name`, ?
 
---------------------------------------------------------------------------------
+---
 
 (source_file
-  (ERROR
-    (literal
-      (number)))
-  (qualified_name
-    (name
-      (identifier))))
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (param_expr
+            (param)))
+        (select_item
+          (param_expr
+            (param)))
+        (select_item
+          (param_expr
+            (param)))
+        (select_item
+          (param_expr))))))
+
+========================================================================
+Single and double quotes
+========================================================================
+
+FROM t |> SELECT 'single', "double", '', ""
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string)))
+        (select_item
+          (literal
+            (string)))))))
+
+========================================================================
+Triple quotes
+========================================================================
+
+FROM t |> SELECT '''one ' two '' three''', """a "b" """, '''''', '''a
+b'''
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string)))
+        (select_item
+          (literal
+            (string
+              (string_content))))))))
+
+========================================================================
+Raw strings
+========================================================================
+
+FROM t |> SELECT r'a\nb', R"\"", r'''raw\'''
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))))))
+
+========================================================================
+Bytes
+========================================================================
+
+FROM t |> SELECT b'bytes', B"bytes", rb'raw\x00', BR"raw", b''
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes)))))))
+
+========================================================================
+Escape sequences
+========================================================================
+
+FROM t |> SELECT 'a\nb\t\'\\', '\x41\X4a', '\u00e9\U0001F600', '\101\7'
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)
+                (escape_sequence)
+                (escape_sequence)))))
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)))))
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)))))
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)))))))))
+
+========================================================================
+Adjacent strings concatenate
+========================================================================
+
+FROM t |> SELECT 'a' 'b' "c", b'x' b'y', 'it''s'
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))
+            (string
+              (string_content))
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))
+            (string
+              (string_content))))))))
+
+========================================================================
+A string without its closing quote ends at the line end
+========================================================================
+
+FROM t |> SELECT 'unclosed
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A triple string without its closing quotes ends at the end of the input
+========================================================================
+
+FROM t |> SELECT '''open
+still open
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))))))

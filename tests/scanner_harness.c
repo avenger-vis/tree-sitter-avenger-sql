@@ -1,221 +1,182 @@
+// Runs the external scanner over every text of a small alphabet up to a length, and over
+// texts that exercise its forms, under the address and undefined-behavior sanitizers. At each
+// position it scans with every token valid, as Tree-sitter's error recovery does, and with each
+// token valid alone, and it checks that a token never ends before its start, that the scanner
+// state survives serialization, and that a scan of a whole text ends.
+
 #include "tree_sitter/parser.h"
 
-#include <assert.h>
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-enum TokenType {
-  LINE_COMMENT,
-  BLOCK_COMMENT,
-  DOLLAR_QUOTED_STRING,
-};
-
 void *tree_sitter_avenger_sql_external_scanner_create(void);
 void tree_sitter_avenger_sql_external_scanner_destroy(void *payload);
-unsigned tree_sitter_avenger_sql_external_scanner_serialize(void *payload,
-                                                            char *buffer);
-void tree_sitter_avenger_sql_external_scanner_deserialize(
-    void *payload, const char *buffer, unsigned length);
-bool tree_sitter_avenger_sql_external_scanner_scan(
-    void *payload, TSLexer *lexer, const bool *valid_symbols);
+unsigned tree_sitter_avenger_sql_external_scanner_serialize(void *payload, char *buffer);
+void tree_sitter_avenger_sql_external_scanner_deserialize(void *payload, const char *buffer, unsigned length);
+bool tree_sitter_avenger_sql_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid_symbols);
+
+enum { TOKEN_COUNT = 5, MAX_TEXT = 64 };
 
 typedef struct {
   TSLexer lexer;
-  const unsigned char *input;
-  size_t length;
-  size_t position;
-  size_t mark;
-} TestLexer;
+  const int32_t *text;
+  uint32_t length;
+  uint32_t position;
+  uint32_t end;
+} Input;
 
-static TestLexer *test_lexer(TSLexer *lexer) { return (TestLexer *)lexer; }
-
-static int32_t decode(const unsigned char *input, size_t length, size_t position,
-                      size_t *width) {
-  if (position >= length) {
-    *width = 0;
-    return 0;
-  }
-  unsigned char first = input[position];
-  if (first < 0x80) {
-    *width = 1;
-    return first;
-  }
-  if ((first & 0xe0) == 0xc0 && position + 1 < length) {
-    *width = 2;
-    return ((int32_t)(first & 0x1f) << 6) | (input[position + 1] & 0x3f);
-  }
-  if ((first & 0xf0) == 0xe0 && position + 2 < length) {
-    *width = 3;
-    return ((int32_t)(first & 0x0f) << 12) |
-           ((int32_t)(input[position + 1] & 0x3f) << 6) |
-           (input[position + 2] & 0x3f);
-  }
-  if ((first & 0xf8) == 0xf0 && position + 3 < length) {
-    *width = 4;
-    return ((int32_t)(first & 0x07) << 18) |
-           ((int32_t)(input[position + 1] & 0x3f) << 12) |
-           ((int32_t)(input[position + 2] & 0x3f) << 6) |
-           (input[position + 3] & 0x3f);
-  }
-  *width = 1;
-  return first;
-}
-
-static void advance(TSLexer *lexer, bool skip) {
+static void input_advance(TSLexer *lexer, bool skip) {
   (void)skip;
-  TestLexer *test = test_lexer(lexer);
-  size_t width = 0;
-  (void)decode(test->input, test->length, test->position, &width);
-  test->position += width;
-  lexer->lookahead = decode(test->input, test->length, test->position, &width);
+  Input *input = (Input *)lexer;
+  if (input->position < input->length) input->position++;
+  lexer->lookahead = input->position < input->length ? input->text[input->position] : 0;
 }
 
-static void mark_end(TSLexer *lexer) {
-  TestLexer *test = test_lexer(lexer);
-  test->mark = test->position;
+static void input_mark_end(TSLexer *lexer) {
+  Input *input = (Input *)lexer;
+  input->end = input->position;
 }
 
-static uint32_t get_column(TSLexer *lexer) {
-  return (uint32_t)test_lexer(lexer)->position;
-}
+static uint32_t input_get_column(TSLexer *lexer) { return ((Input *)lexer)->position; }
 
-static bool included_range_start(const TSLexer *lexer) {
+static bool input_is_at_included_range_start(const TSLexer *lexer) {
   (void)lexer;
   return false;
 }
 
-static bool eof(const TSLexer *lexer) {
-  const TestLexer *test = (const TestLexer *)lexer;
-  return test->position >= test->length;
+static bool input_eof(const TSLexer *lexer) {
+  const Input *input = (const Input *)lexer;
+  return input->position >= input->length;
 }
 
-static void log_message(const TSLexer *lexer, const char *format, ...) {
+static void input_log(const TSLexer *lexer, const char *format, ...) {
   (void)lexer;
   (void)format;
 }
 
-static TestLexer make_lexer(const char *source) {
-  TestLexer test = {0};
-  test.input = (const unsigned char *)source;
-  test.length = strlen(source);
-  test.lexer.advance = advance;
-  test.lexer.mark_end = mark_end;
-  test.lexer.get_column = get_column;
-  test.lexer.is_at_included_range_start = included_range_start;
-  test.lexer.eof = eof;
-  test.lexer.log = log_message;
-  size_t width = 0;
-  test.lexer.lookahead = decode(test.input, test.length, 0, &width);
-  return test;
+static void input_seek(Input *input, uint32_t position) {
+  input->position = position;
+  input->end = position;
+  input->lexer.lookahead = position < input->length ? input->text[position] : 0;
 }
 
-static void expect_scan(const char *source, enum TokenType token,
-                        bool expected) {
-  TestLexer lexer = make_lexer(source);
-  bool valid[3] = {false, false, false};
-  valid[token] = true;
-  bool scanned = tree_sitter_avenger_sql_external_scanner_scan(
-      NULL, &lexer.lexer, valid);
-  assert(scanned == expected);
-  if (expected) {
-    assert(lexer.lexer.result_symbol == (TSSymbol)token);
-    assert(lexer.mark == lexer.length);
-  }
+static unsigned failures = 0;
+
+static void fail(const char *message, const int32_t *text, uint32_t length, uint32_t position) {
+  failures++;
+  fprintf(stderr, "%s at %u of: ", message, position);
+  for (uint32_t i = 0; i < length; i++) fputc(text[i] < 128 ? (char)text[i] : '?', stderr);
+  fputc('\n', stderr);
 }
 
-static char *nested_comment(size_t depth) {
-  size_t length = depth * 4 + 1;
-  char *source = malloc(length + 1);
-  assert(source != NULL);
-  size_t position = 0;
-  for (size_t index = 0; index < depth; index++) {
-    source[position++] = '/';
-    source[position++] = '*';
-  }
-  source[position++] = 'x';
-  for (size_t index = 0; index < depth; index++) {
-    source[position++] = '*';
-    source[position++] = '/';
-  }
-  source[position] = '\0';
-  assert(position == length);
-  return source;
-}
+// Scans `text` from its start, as a parser would, with every token valid, and at each position
+// also tries each token alone from a copy of the state.
+static void scan_text(const int32_t *text, uint32_t length) {
+  Input input = {
+      .lexer =
+          {
+              .advance = input_advance,
+              .mark_end = input_mark_end,
+              .get_column = input_get_column,
+              .is_at_included_range_start = input_is_at_included_range_start,
+              .eof = input_eof,
+              .log = input_log,
+          },
+      .text = text,
+      .length = length,
+  };
+  bool all[TOKEN_COUNT];
+  for (int i = 0; i < TOKEN_COUNT; i++) all[i] = true;
 
-static char *long_dollar_string(size_t tag_length, size_t body_length) {
-  size_t length = (tag_length + 2) * 2 + body_length;
-  char *source = malloc(length + 1);
-  assert(source != NULL);
-  size_t position = 0;
-  for (int delimiter = 0; delimiter < 2; delimiter++) {
-    source[position++] = '$';
-    source[position++] = '_';
-    memset(source + position, 't', tag_length - 1);
-    position += tag_length - 1;
-    source[position++] = '$';
-    if (delimiter == 0) {
-      memset(source + position, 'x', body_length);
-      position += body_length;
+  void *scanner = tree_sitter_avenger_sql_external_scanner_create();
+  void *probe = tree_sitter_avenger_sql_external_scanner_create();
+  char state[TREE_SITTER_SERIALIZATION_BUFFER_SIZE];
+  char again[TREE_SITTER_SERIALIZATION_BUFFER_SIZE];
+
+  uint32_t position = 0;
+  unsigned steps = 0;
+  while (position <= length && steps++ < 4 * MAX_TEXT + 8) {
+    unsigned size = tree_sitter_avenger_sql_external_scanner_serialize(scanner, state);
+    tree_sitter_avenger_sql_external_scanner_deserialize(probe, state, size);
+    unsigned size_again = tree_sitter_avenger_sql_external_scanner_serialize(probe, again);
+    if (size != size_again || memcmp(state, again, size) != 0) fail("state changed by serialization", text, length, position);
+
+    for (int token = 0; token < TOKEN_COUNT; token++) {
+      bool alone[TOKEN_COUNT] = {false};
+      alone[token] = true;
+      tree_sitter_avenger_sql_external_scanner_deserialize(probe, state, size);
+      input_seek(&input, position);
+      if (tree_sitter_avenger_sql_external_scanner_scan(probe, &input.lexer, alone)) {
+        if (input.lexer.result_symbol != token) fail("token outside the valid set", text, length, position);
+        if (input.end < position) fail("token ends before its start", text, length, position);
+      }
     }
+
+    input_seek(&input, position);
+    if (tree_sitter_avenger_sql_external_scanner_scan(scanner, &input.lexer, all)) {
+      if (input.end < position) fail("token ends before its start", text, length, position);
+      if (input.end > position) {
+        position = input.end;
+        continue;
+      }
+      // A token of no width, an end, leaves the literal, so the next scan moves on.
+      continue;
+    }
+    // No external token here: the internal lexer would read one character or more.
+    position++;
   }
-  source[position] = '\0';
-  assert(position == length);
-  return source;
+  if (position <= length) fail("the scan did not end", text, length, position);
+
+  tree_sitter_avenger_sql_external_scanner_destroy(probe);
+  tree_sitter_avenger_sql_external_scanner_destroy(scanner);
+}
+
+static void scan_ascii(const char *text) {
+  int32_t buffer[MAX_TEXT];
+  uint32_t length = 0;
+  for (; text[length] != '\0' && length < MAX_TEXT; length++) buffer[length] = (unsigned char)text[length];
+  scan_text(buffer, length);
 }
 
 int main(void) {
-  void *payload = tree_sitter_avenger_sql_external_scanner_create();
-  char serialization[TREE_SITTER_SERIALIZATION_BUFFER_SIZE] = {0};
-  assert(payload == NULL);
-  assert(tree_sitter_avenger_sql_external_scanner_serialize(
-             payload, serialization) == 0);
-  for (unsigned length = 0; length <= TREE_SITTER_SERIALIZATION_BUFFER_SIZE;
-       length++) {
-    tree_sitter_avenger_sql_external_scanner_deserialize(payload, serialization,
-                                                         length);
-    assert(tree_sitter_avenger_sql_external_scanner_serialize(
-               payload, serialization) == 0);
+  // Every text of these characters, up to six of them.
+  static const int32_t alphabet[] = {'\'', '"', '\\', 'r', 'b', 'x', '\n', ' ', 0x3000};
+  enum { SIZE = sizeof(alphabet) / sizeof(alphabet[0]), LONGEST = 6 };
+  int32_t text[LONGEST];
+  unsigned long texts = 0;
+  for (uint32_t length = 0; length <= LONGEST; length++) {
+    unsigned long count = 1;
+    for (uint32_t i = 0; i < length; i++) count *= SIZE;
+    for (unsigned long n = 0; n < count; n++) {
+      unsigned long rest = n;
+      for (uint32_t i = 0; i < length; i++) {
+        text[i] = alphabet[rest % SIZE];
+        rest /= SIZE;
+      }
+      scan_text(text, length);
+      texts++;
+    }
   }
 
-  expect_scan("-", LINE_COMMENT, false);
-  expect_scan("--", LINE_COMMENT, false);
-  expect_scan("-- ", LINE_COMMENT, true);
-  expect_scan("-- comment\n", LINE_COMMENT, true);
-  expect_scan("--\xc2\xa0" "comment\n", LINE_COMMENT, true);
-  expect_scan("-- comment\r\n", LINE_COMMENT, true);
-  expect_scan("--\rcomment", LINE_COMMENT, true);
-  expect_scan("--comment", LINE_COMMENT, false);
-  expect_scan("/", BLOCK_COMMENT, false);
-  expect_scan("/*", BLOCK_COMMENT, false);
-  expect_scan("/**", BLOCK_COMMENT, false);
-  expect_scan("/**/", BLOCK_COMMENT, true);
-  expect_scan("/* outer /* inner */ outer */", BLOCK_COMMENT, true);
-  expect_scan("/* unterminated", BLOCK_COMMENT, false);
-  expect_scan("$", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$$", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$$x", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$$raw$$", DOLLAR_QUOTED_STRING, true);
-  expect_scan("$t", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$t$", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$t$x", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$t$x$", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$t$x$t", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$tag$raw$tag$", DOLLAR_QUOTED_STRING, true);
-  expect_scan("$tag$raw$other$", DOLLAR_QUOTED_STRING, false);
-  expect_scan("$caf\xc3\xa9$raw$caf\xc3\xa9$", DOLLAR_QUOTED_STRING, false);
+  static const char *const forms[] = {
+      "'a' \"b\" '''c ' d '' e''' \"\"\"f\"\"\"",
+      "r'a\\'b' R\"\\\\\" rb'\\x00' BR\"x\" b'' ''''''",
+      "'\\x41\\X4a\\u00e9\\U0001F600\\101\\7\\'\\\\'",
+      "'unclosed\n'next'",
+      "'''open\nstill open",
+      "'\\",
+      "r'\\",
+      "'''a''''",
+  };
+  for (size_t i = 0; i < sizeof(forms) / sizeof(forms[0]); i++) scan_ascii(forms[i]);
 
-  char *nested = nested_comment(100000);
-  expect_scan(nested, BLOCK_COMMENT, true);
-  free(nested);
-
-  char *dollar = long_dollar_string(100000, 1000000);
-  expect_scan(dollar, DOLLAR_QUOTED_STRING, true);
-  free(dollar);
-
-  tree_sitter_avenger_sql_external_scanner_destroy(payload);
+  if (failures > 0) {
+    fprintf(stderr, "%u failures\n", failures);
+    return 1;
+  }
+  printf("scanned %lu texts and %zu forms\n", texts, sizeof(forms) / sizeof(forms[0]));
   return 0;
 }
