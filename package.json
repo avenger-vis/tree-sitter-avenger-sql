@@ -16,7 +16,6 @@
     "check-generated": "sh scripts/check_generated.sh",
     "build:wasm": "node scripts/build_wasm.mjs",
     "measure": "node scripts/measure_parser.mjs",
-    "sync-conformance": "node scripts/sync_avenger_conformance.mjs",
     "test:scanner": "sh scripts/test_scanner_sanitizers.sh"
   },
   "license": "MIT",
