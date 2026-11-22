@@ -19,7 +19,7 @@
     "test:scanner": "sh scripts/test_scanner_sanitizers.sh"
   },
   "license": "MIT",
-  "author": "Avenger contributors and Derek Stride",
+  "author": "Jon Mease",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/avenger-vis/tree-sitter-avenger-sql.git"

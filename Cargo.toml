@@ -2,7 +2,7 @@
 name = "tree-sitter-avenger-sql"
 description = "Tree-sitter grammar for Avenger SQL queries and expressions"
 version = "0.1.0"
-authors = ["Avenger contributors", "Derek Stride"]
+authors = ["Jon Mease"]
 license = "MIT"
 readme = "README.md"
 keywords = ["avenger", "incremental", "parsing", "sql", "tree-sitter"]
