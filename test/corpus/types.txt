@@ -1,0 +1,151 @@
+========================================================================
+Named types and their parameters
+========================================================================
+
+FROM t |> SELECT CAST(a AS INT64), CAST(b AS STRING(10)), CAST(c AS NUMERIC(10, 2)), CAST(d AS BYTES(MAX)), CAST(e AS INTERVAL)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type
+              (name_ref
+                (identifier)))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type
+              (name_ref
+                (identifier))
+              (type_params
+                (literal
+                  (integer))))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type
+              (name_ref
+                (identifier))
+              (type_params
+                (literal
+                  (integer))
+                (literal
+                  (integer))))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type
+              (name_ref
+                (identifier))
+              (type_params))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type)))))))
+
+========================================================================
+Arrays, structs, and ranges
+========================================================================
+
+FROM t |> SELECT CAST(a AS ARRAY<STRUCT<x INT64, STRING>>), CAST(b AS RANGE<DATE>), CAST(c AS STRUCT<>)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (array_type
+              (struct_type
+                (struct_field
+                  (name
+                    (identifier))
+                  (named_type
+                    (name_ref
+                      (identifier))))
+                (struct_field
+                  (named_type
+                    (name_ref
+                      (identifier))))))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (range_type
+              (named_type
+                (name_ref
+                  (identifier))))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (struct_type)))))))
+
+========================================================================
+Nested types close with two tokens
+========================================================================
+
+FROM t |> SELECT CAST(a AS ARRAY<ARRAY<INT64>>)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (array_type
+              (array_type
+                (named_type
+                  (name_ref
+                    (identifier)))))))))))

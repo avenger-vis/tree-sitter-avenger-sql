@@ -1,0 +1,1215 @@
+========================================================================
+Precedence of logical, comparison, and arithmetic operators
+========================================================================
+
+FROM t |> WHERE a OR b AND NOT c = d + e * f
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          rhs: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (prefix_expr
+              (bin_expr
+                lhs: (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))
+                rhs: (bin_expr
+                  lhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))
+                  rhs: (bin_expr
+                    lhs: (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))
+                    rhs: (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))))))))))))
+
+========================================================================
+Precedence of unary operators and paths
+========================================================================
+
+FROM t |> WHERE -a.b.c * 2 = 0
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (prefix_expr
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))
+                  (name_ref
+                    (identifier))
+                  (name_ref
+                    (identifier)))))
+            rhs: (literal
+              (integer)))
+          rhs: (literal
+            (integer)))))))
+
+========================================================================
+Precedence of bitwise operators
+========================================================================
+
+FROM t |> WHERE a | b ^ c & d << 1 = x
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (bin_expr
+              lhs: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              rhs: (bin_expr
+                lhs: (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))
+                rhs: (bin_expr
+                  lhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))
+                  rhs: (literal
+                    (integer))))))
+          rhs: (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+BETWEEN binds tighter than AND
+========================================================================
+
+FROM t |> WHERE x BETWEEN 1 AND 2 AND y IS NOT NULL
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (between_expr
+            value: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            low: (literal
+              (integer))
+            high: (literal
+              (integer)))
+          rhs: (is_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))))))))
+
+========================================================================
+Concatenation binds between addition and multiplication
+========================================================================
+
+FROM t |> WHERE a || b * c = d + e || f
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (bin_expr
+              lhs: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              rhs: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          rhs: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (bin_expr
+              lhs: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              rhs: (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))))))))
+
+========================================================================
+Shift right and not equal are two characters
+========================================================================
+
+FROM t |> WHERE a >> 2 <> b
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (literal
+              (integer)))
+          rhs: (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Comparisons
+========================================================================
+
+FROM t |> WHERE a = 1 AND b != 2 AND c < 3 AND d <= 4 AND e > 5 AND f >= 6
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (bin_expr
+              lhs: (bin_expr
+                lhs: (bin_expr
+                  lhs: (bin_expr
+                    lhs: (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))
+                    rhs: (literal
+                      (integer)))
+                  rhs: (bin_expr
+                    lhs: (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))
+                    rhs: (literal
+                      (integer))))
+                rhs: (bin_expr
+                  lhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))
+                  rhs: (literal
+                    (integer))))
+              rhs: (bin_expr
+                lhs: (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))
+                rhs: (literal
+                  (integer))))
+            rhs: (bin_expr
+              lhs: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              rhs: (literal
+                (integer))))
+          rhs: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (literal
+              (integer))))))))
+
+========================================================================
+IS and IS DISTINCT FROM
+========================================================================
+
+FROM t |> WHERE a IS NULL AND b IS NOT TRUE AND c IS UNKNOWN AND d IS NOT DISTINCT FROM e
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (bin_expr
+              lhs: (is_expr
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))
+              rhs: (is_expr
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            rhs: (is_expr
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          rhs: (is_distinct_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))))))))
+
+========================================================================
+IN
+========================================================================
+
+FROM t |> WHERE a IN (1, 2,) AND b NOT IN (FROM u |> SELECT x) AND c IN UNNEST(arr) AND d IN ()
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (bin_expr
+              lhs: (in_expr
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))
+                (in_list
+                  (literal
+                    (integer))
+                  (literal
+                    (integer))))
+              rhs: (in_expr
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))
+                (in_query
+                  (paren_query
+                    (query
+                      (from_clause
+                        (table_source
+                          (path
+                            (name_ref
+                              (identifier)))))
+                      (pipe_select
+                        (select_item
+                          (path_expr
+                            (path
+                              (name_ref
+                                (identifier)))))))))))
+            rhs: (in_expr
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              (in_unnest
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))))
+          rhs: (in_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (in_list)))))))
+
+========================================================================
+LIKE
+========================================================================
+
+FROM t |> WHERE s LIKE 'a%' AND s NOT LIKE ANY ('a%', 'b%') AND s LIKE ALL (FROM u |> SELECT p)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (like_expr
+              value: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              pattern: (literal
+                (string
+                  (string_content))))
+            rhs: (like_expr
+              value: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              (quantified_patterns
+                (in_list
+                  (literal
+                    (string
+                      (string_content)))
+                  (literal
+                    (string
+                      (string_content)))))))
+          rhs: (like_expr
+            value: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (quantified_patterns
+              (in_query
+                (paren_query
+                  (query
+                    (from_clause
+                      (table_source
+                        (path
+                          (name_ref
+                            (identifier)))))
+                    (pipe_select
+                      (select_item
+                        (path_expr
+                          (path
+                            (name_ref
+                              (identifier))))))))))))))))
+
+========================================================================
+CASE
+========================================================================
+
+FROM t |> SELECT CASE WHEN a THEN 1 WHEN b THEN 2 ELSE 3 END, CASE x WHEN 1 THEN 'one' END
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (case_expr
+            (when_clause
+              condition: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              result: (literal
+                (integer)))
+            (when_clause
+              condition: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              result: (literal
+                (integer)))
+            (else_clause
+              (literal
+                (integer)))))
+        (select_item
+          (case_expr
+            operand: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (when_clause
+              condition: (literal
+                (integer))
+              result: (literal
+                (string
+                  (string_content))))))))))
+
+========================================================================
+CAST and SAFE_CAST
+========================================================================
+
+FROM t |> SELECT CAST(x AS INT64), SAFE_CAST(s AS DATE FORMAT 'YYYY-MM-DD' AT TIME ZONE 'UTC'), safe_cast
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type
+              (name_ref
+                (identifier)))))
+        (select_item
+          (cast_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (named_type
+              (name_ref
+                (identifier)))
+            (format_clause
+              (literal
+                (string
+                  (string_content)))
+              (time_zone
+                (literal
+                  (string
+                    (string_content)))))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+EXTRACT
+========================================================================
+
+FROM t |> SELECT EXTRACT(MONTH FROM d), EXTRACT(DATE FROM ts AT TIME ZONE 'UTC')
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (extract_expr
+            part: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            value: (path_expr
+              (path
+                (name_ref
+                  (identifier))))))
+        (select_item
+          (extract_expr
+            part: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            value: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (time_zone
+              (literal
+                (string
+                  (string_content))))))))))
+
+========================================================================
+INTERVAL
+========================================================================
+
+FROM t |> SELECT INTERVAL 1 DAY, INTERVAL '1-2' YEAR TO MONTH, INTERVAL (x) DAY, interval(x)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (interval_expr
+            (literal
+              (integer))
+            from: (name_ref
+              (identifier))))
+        (select_item
+          (interval_expr
+            (literal
+              (string
+                (string_content)))
+            from: (name_ref
+              (identifier))
+            to: (name_ref
+              (identifier))))
+        (select_item
+          (interval_expr
+            (paren_expr
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))
+            from: (name_ref
+              (identifier))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))))))
+
+========================================================================
+Arrays
+========================================================================
+
+FROM t |> SELECT [1, 2,], ARRAY[1], ARRAY<INT64>[], ARRAY(FROM u |> SELECT x)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (array_expr
+            (literal
+              (integer))
+            (literal
+              (integer))))
+        (select_item
+          (array_expr
+            (literal
+              (integer))))
+        (select_item
+          (array_expr
+            (named_type
+              (name_ref
+                (identifier)))))
+        (select_item
+          (array_subquery_expr
+            (paren_query
+              (query
+                (from_clause
+                  (table_source
+                    (path
+                      (name_ref
+                        (identifier)))))
+                (pipe_select
+                  (select_item
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))))))))))))
+
+========================================================================
+Structs, tuples, and parentheses
+========================================================================
+
+FROM t |> SELECT STRUCT(1 AS a, 'b'), STRUCT<x INT64>(1), (a, b), (a,), (a), (FROM u)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (struct_expr
+            (aliased_expr
+              (literal
+                (integer))
+              (alias
+                (name
+                  (identifier))))
+            (aliased_expr
+              (literal
+                (string
+                  (string_content))))))
+        (select_item
+          (struct_expr
+            (struct_field
+              (name
+                (identifier))
+              (named_type
+                (name_ref
+                  (identifier))))
+            (aliased_expr
+              (literal
+                (integer)))))
+        (select_item
+          (tuple_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))))
+        (select_item
+          (tuple_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))))
+        (select_item
+          (paren_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))))
+        (select_item
+          (subquery_expr
+            (paren_query
+              (query
+                (from_clause
+                  (table_source
+                    (path
+                      (name_ref
+                        (identifier)))))))))))))
+
+========================================================================
+EXISTS
+========================================================================
+
+FROM t |> WHERE EXISTS (FROM u |> SELECT 1)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (exists_expr
+          (paren_query
+            (query
+              (from_clause
+                (table_source
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (pipe_select
+                (select_item
+                  (literal
+                    (integer)))))))))))
+
+========================================================================
+Fields and subscripts
+========================================================================
+
+FROM t |> SELECT f(x).y, a[0], a[OFFSET(1)].b, (s).c, t.2023, t.select, `group`.`order`
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (field_expr
+            (call_expr
+              (path
+                (name_ref
+                  (identifier)))
+              (arg_list
+                (arg
+                  (path_expr
+                    (path
+                      (name_ref
+                        (identifier)))))))
+            (name_ref
+              (identifier))))
+        (select_item
+          (subscript_expr
+            base: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            index: (literal
+              (integer))))
+        (select_item
+          (field_expr
+            (subscript_expr
+              base: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              index: (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (arg
+                    (literal
+                      (integer))))))
+            (name_ref
+              (identifier))))
+        (select_item
+          (field_expr
+            (paren_expr
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))
+            (name_ref
+              (identifier))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (quoted_identifier))
+              (name_ref
+                (quoted_identifier)))))))))
+
+========================================================================
+Calls with clauses
+========================================================================
+
+FROM t |> SELECT COUNT(DISTINCT x), COUNT(*), ARRAY_AGG(x IGNORE NULLS ORDER BY y DESC NULLS LAST LIMIT 10), ANY_VALUE(x HAVING MAX y)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (star_arg))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (null_treatment)
+              (order_by
+                (order_key
+                  (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))))
+              (call_limit
+                (literal
+                  (integer))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (having_clause
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))))))
+
+========================================================================
+Table arguments
+========================================================================
+
+FROM t |> SELECT f(TABLE u, t => TABLE v, table)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (table_arg
+                (path
+                  (name_ref
+                    (identifier))))
+              (named_table_arg
+                name: (name_ref
+                  (identifier))
+                (path
+                  (name_ref
+                    (identifier))))
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))))))
+
+========================================================================
+Windows
+========================================================================
+
+FROM t |> SELECT SUM(x) OVER w, SUM(x) OVER (), SUM(x) OVER (w PARTITION BY a, b ORDER BY c ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), AVG(x) OVER (ORDER BY d RANGE 3 PRECEDING)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (name_ref
+                (identifier)))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (window_spec))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (window_spec
+                (name_ref
+                  (identifier))
+                (partition_by
+                  (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))
+                  (path_expr
+                    (path
+                      (name_ref
+                        (identifier)))))
+                (order_by
+                  (order_key
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))))
+                (frame
+                  start: (frame_bound)
+                  end: (frame_bound))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (window_spec
+                (order_by
+                  (order_key
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))))
+                (frame
+                  start: (frame_bound
+                    (literal
+                      (integer))))))))))))
+
+========================================================================
+A frame after a trailing comma
+========================================================================
+
+FROM t |> SELECT SUM(x) OVER (ORDER BY a, RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING), SUM(x) OVER (ORDER BY a, RANGE(1, 2))
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (window_spec
+                (order_by
+                  (order_key
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier))))))
+                (frame
+                  start: (frame_bound
+                    (literal
+                      (integer)))
+                  end: (frame_bound
+                    (literal
+                      (integer))))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (window_spec
+                (order_by
+                  (order_key
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier)))))
+                  (order_key
+                    (call_expr
+                      (path
+                        (name_ref
+                          (identifier)))
+                      (arg_list
+                        (arg
+                          (literal
+                            (integer)))
+                        (arg
+                          (literal
+                            (integer)))))))))))))))
+
+========================================================================
+Typed literals of ranges
+========================================================================
+
+FROM t |> SELECT RANGE<DATE> '[2024-01-01, UNBOUNDED)'
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (typed_literal
+            (named_type
+              (name_ref
+                (identifier)))
+            (string
+              (string_content))))))))

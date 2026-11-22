@@ -9,6 +9,7 @@ import pipes from "./grammar/pipes.js";
 import queries from "./grammar/queries.js";
 import sources from "./grammar/sources.js";
 import statements from "./grammar/statements.js";
+import types from "./grammar/types.js";
 
 export default grammar({
   name: "avenger_sql",
@@ -26,7 +27,17 @@ export default grammar({
     global: _ => RESERVED.map(caseInsensitive),
   },
 
-  supertypes: $ => [$._stmt, $._expr, $._source, $._pipe_operator, $._select_entry, $._argument],
+  // The prefixes that two readings share, which a later token decides.
+  conflicts: $ => [
+    // `INTERVAL (x) DAY` is an interval, and `INTERVAL(x)` a call.
+    [$.interval_expr, $._reserved_call_name],
+    // After `ORDER BY k,` or `PARTITION BY k,`, `RANGE` starts an item, as `RANGE(1, 2)`, or
+    // the window's frame.
+    [$.order_by],
+    [$.partition_by],
+  ],
+
+  supertypes: $ => [$._stmt, $._expr, $._type, $._source, $._pipe_operator, $._select_entry, $._argument, $._in_set],
 
   rules: {
     ...statements,
@@ -34,6 +45,7 @@ export default grammar({
     ...sources,
     ...pipes,
     ...expressions,
+    ...types,
     ...lexical,
   },
 });
