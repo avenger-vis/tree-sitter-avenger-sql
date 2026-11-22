@@ -1,0 +1,558 @@
+========================================================================
+Tables with aliases and WITH OFFSET
+========================================================================
+
+FROM sales AS s
+FROM sales s
+FROM arr WITH OFFSET AS i
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (alias
+            (name
+              (identifier))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (alias
+            (name
+              (identifier))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (with_offset
+            (alias
+              (name
+                (identifier)))))))))
+
+========================================================================
+Dashed table names
+========================================================================
+
+FROM my-project.dataset.t
+FROM my-project-2.dataset
+FROM a-1-b
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)
+              (identifier))
+            (name_ref
+              (identifier))
+            (name_ref
+              (identifier))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)
+              (identifier)
+              (float))
+            (name_ref
+              (identifier))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)
+              (integer)
+              (identifier))))))))
+
+========================================================================
+Joins associate to the left
+========================================================================
+
+FROM a, b JOIN c USING (k)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (join
+          lhs: (join
+            lhs: (table_source
+              (path
+                (name_ref
+                  (identifier))))
+            (join_op)
+            rhs: (table_source
+              (path
+                (name_ref
+                  (identifier)))))
+          (join_op)
+          rhs: (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (using_condition
+            (name_list
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Join operators and conditions
+========================================================================
+
+FROM a NATURAL LEFT OUTER JOIN b, c CROSS JOIN d INNER JOIN e ON d.k = e.k FULL JOIN f USING (k, j,) RIGHT JOIN g ON TRUE
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (join
+          lhs: (join
+            lhs: (join
+              lhs: (join
+                lhs: (join
+                  lhs: (join
+                    lhs: (table_source
+                      (path
+                        (name_ref
+                          (identifier))))
+                    (join_op)
+                    rhs: (table_source
+                      (path
+                        (name_ref
+                          (identifier)))))
+                  (join_op)
+                  rhs: (table_source
+                    (path
+                      (name_ref
+                        (identifier)))))
+                (join_op)
+                rhs: (table_source
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (join_op)
+              rhs: (table_source
+                (path
+                  (name_ref
+                    (identifier))))
+              (on_condition
+                (bin_expr
+                  lhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))
+                      (name_ref
+                        (identifier))))
+                  rhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))
+                      (name_ref
+                        (identifier)))))))
+            (join_op)
+            rhs: (table_source
+              (path
+                (name_ref
+                  (identifier))))
+            (using_condition
+              (name_list
+                (name_ref
+                  (identifier))
+                (name_ref
+                  (identifier)))))
+          (join_op)
+          rhs: (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (on_condition
+            (literal)))))))
+
+========================================================================
+A join in parentheses
+========================================================================
+
+FROM (a JOIN b USING (k)) JOIN c USING (k)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (join
+          lhs: (paren_join
+            (join
+              lhs: (table_source
+                (path
+                  (name_ref
+                    (identifier))))
+              (join_op)
+              rhs: (table_source
+                (path
+                  (name_ref
+                    (identifier))))
+              (using_condition
+                (name_list
+                  (name_ref
+                    (identifier))))))
+          (join_op)
+          rhs: (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (using_condition
+            (name_list
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+A trailing comma of FROM
+========================================================================
+
+FROM a, |> SELECT x
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Subqueries and LATERAL
+========================================================================
+
+FROM (FROM u) AS q, LATERAL (FROM v |> WHERE v.k = q.k)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (join
+          lhs: (subquery_source
+            (paren_query
+              (query
+                (from_clause
+                  (table_source
+                    (path
+                      (name_ref
+                        (identifier)))))))
+            (alias
+              (name
+                (identifier))))
+          (join_op)
+          rhs: (subquery_source
+            (paren_query
+              (query
+                (from_clause
+                  (table_source
+                    (path
+                      (name_ref
+                        (identifier)))))
+                (pipe_where
+                  condition: (bin_expr
+                    lhs: (path_expr
+                      (path
+                        (name_ref
+                          (identifier))
+                        (name_ref
+                          (identifier))))
+                    rhs: (path_expr
+                      (path
+                        (name_ref
+                          (identifier))
+                        (name_ref
+                          (identifier))))))))))))))
+
+========================================================================
+UNNEST
+========================================================================
+
+FROM UNNEST([1, 2]) AS x WITH OFFSET
+FROM UNNEST([1], [2], mode => 'PAD',) AS y
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (unnest_source
+          (aliased_expr
+            (array_expr
+              (literal
+                (integer))
+              (literal
+                (integer))))
+          (alias
+            (name
+              (identifier)))
+          (with_offset))))
+    (query
+      (from_clause
+        (unnest_source
+          (aliased_expr
+            (array_expr
+              (literal
+                (integer))))
+          (aliased_expr
+            (array_expr
+              (literal
+                (integer))))
+          (named_arg
+            name: (name_ref
+              (identifier))
+            value: (literal
+              (string
+                (string_content))))
+          (alias
+            (name
+              (identifier))))))))
+
+========================================================================
+Table function calls
+========================================================================
+
+FROM f(1, TABLE t) AS r
+FROM LATERAL g(x)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (tvf_source
+          (path
+            (name_ref
+              (identifier)))
+          (arg_list
+            (arg
+              (literal
+                (integer)))
+            (table_arg
+              (path
+                (name_ref
+                  (identifier)))))
+          (alias
+            (name
+              (identifier))))))
+    (query
+      (from_clause
+        (tvf_source
+          (path
+            (name_ref
+              (identifier)))
+          (arg_list
+            (arg
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))))))))
+
+========================================================================
+PIVOT and UNPIVOT
+========================================================================
+
+FROM t PIVOT (SUM(a) AS s, FOR k IN (1, 2 AS two,)) AS p
+FROM t UNPIVOT INCLUDE NULLS ((v, w) FOR k IN ((a, b) AS 'ab', c 1)) AS u
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (pivot_source
+          (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (pivot_clause
+            (aliased_expr
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (arg
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier)))))))
+              (alias
+                (name
+                  (identifier))))
+            column: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (pivot_values
+              (aliased_expr
+                (literal
+                  (integer)))
+              (aliased_expr
+                (literal
+                  (integer))
+                (alias
+                  (name
+                    (identifier)))))
+            (alias
+              (name
+                (identifier)))))))
+    (query
+      (from_clause
+        (unpivot_source
+          (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (unpivot_clause
+            (path_list
+              (path
+                (name_ref
+                  (identifier)))
+              (path
+                (name_ref
+                  (identifier))))
+            (path
+              (name_ref
+                (identifier)))
+            (unpivot_item
+              (path_list
+                (path
+                  (name_ref
+                    (identifier)))
+                (path
+                  (name_ref
+                    (identifier))))
+              (literal
+                (string
+                  (string_content))))
+            (unpivot_item
+              (path_list
+                (path
+                  (name_ref
+                    (identifier))))
+              (literal
+                (integer)))
+            (alias
+              (name
+                (identifier)))))))))
+
+========================================================================
+PIVOT and UNPIVOT as aliases
+========================================================================
+
+FROM t pivot
+FROM t AS unpivot
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (alias
+            (name
+              (identifier))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (alias
+            (name
+              (identifier))))))))
+
+========================================================================
+TABLESAMPLE
+========================================================================
+
+FROM t TABLESAMPLE BERNOULLI (10 PERCENT) REPEATABLE (1)
+FROM t TABLESAMPLE RESERVOIR (5 ROWS PARTITION BY k) WITH WEIGHT AS w REPEATABLE (2)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (sample_source
+          (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (sample_clause
+            method: (name_ref
+              (identifier))
+            (sample_size
+              (literal
+                (integer)))
+            (repeatable
+              (literal
+                (integer)))))))
+    (query
+      (from_clause
+        (sample_source
+          (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (sample_clause
+            method: (name_ref
+              (identifier))
+            (sample_size
+              (literal
+                (integer))
+              (partition_by
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (weight
+              (alias
+                (name
+                  (identifier))))
+            (repeatable
+              (literal
+                (integer)))))))))

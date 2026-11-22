@@ -1,0 +1,346 @@
+========================================================================
+Every clause
+========================================================================
+
+FROM t MATCH_RECOGNIZE (PARTITION BY k ORDER BY x MEASURES FIRST(a.x) AS f, LAST(b.x) AS l AFTER MATCH SKIP PAST LAST ROW PATTERN (a b+) DEFINE a AS x > 0, b AS x < 0 OPTIONS (use_longest_match = TRUE)) AS m
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (match_recognize_source
+          (table_source
+            (path
+              (name_ref
+                (identifier))))
+          (match_recognize_clause
+            (partition_by
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))
+            (order_by
+              (order_key
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (measures
+              (measure
+                (call_expr
+                  (path
+                    (name_ref
+                      (identifier)))
+                  (arg_list
+                    (arg
+                      (path_expr
+                        (path
+                          (name_ref
+                            (identifier))
+                          (name_ref
+                            (identifier)))))))
+                (name
+                  (identifier)))
+              (measure
+                (call_expr
+                  (path
+                    (name_ref
+                      (identifier)))
+                  (arg_list
+                    (arg
+                      (path_expr
+                        (path
+                          (name_ref
+                            (identifier))
+                          (name_ref
+                            (identifier)))))))
+                (name
+                  (identifier))))
+            (after_match_skip)
+            (row_pattern
+              (pattern_alternation
+                (pattern_sequence
+                  (pattern_variable
+                    (name_ref
+                      (identifier)))
+                  (pattern_variable
+                    (name_ref
+                      (identifier))
+                    (quantifier)))))
+            (define
+              (pattern_definition
+                (name
+                  (identifier))
+                (bin_expr
+                  lhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))
+                  rhs: (literal
+                    (integer))))
+              (pattern_definition
+                (name
+                  (identifier))
+                (bin_expr
+                  lhs: (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))
+                  rhs: (literal
+                    (integer)))))
+            (options
+              (option_entry
+                (name
+                  (identifier))
+                (literal)))
+            (alias
+              (name
+                (identifier)))))))))
+
+========================================================================
+Quantifiers and anchors
+========================================================================
+
+FROM t |> MATCH_RECOGNIZE (ORDER BY x MEASURES COUNT(*) AS n AFTER MATCH SKIP TO NEXT ROW PATTERN (^ a? b* c+ d{2} e{2,} f{,3} g{1,3}? h*? $) DEFINE a AS TRUE)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_match_recognize
+        (match_recognize_clause
+          (order_by
+            (order_key
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          (measures
+            (measure
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (star_arg)))
+              (name
+                (identifier))))
+          (after_match_skip)
+          (row_pattern
+            (pattern_alternation
+              (pattern_sequence
+                (pattern_anchor)
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier
+                    (quantifier_min
+                      (literal
+                        (integer)))))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier
+                    (quantifier_min
+                      (literal
+                        (integer)))))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier
+                    (quantifier_max
+                      (literal
+                        (integer)))))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier
+                    (quantifier_min
+                      (literal
+                        (integer)))
+                    (quantifier_max
+                      (literal
+                        (integer)))))
+                (pattern_variable
+                  (name_ref
+                    (identifier))
+                  (quantifier))
+                (pattern_anchor))))
+          (define
+            (pattern_definition
+              (name
+                (identifier))
+              (literal))))))))
+
+========================================================================
+Alternation, groups, and empty patterns
+========================================================================
+
+FROM t |> MATCH_RECOGNIZE (ORDER BY x MEASURES COUNT(*) AS n PATTERN ((a | b)+ || c | ) DEFINE a AS TRUE)
+FROM t |> MATCH_RECOGNIZE (ORDER BY x MEASURES COUNT(*) AS n PATTERN () DEFINE a AS TRUE)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_match_recognize
+        (match_recognize_clause
+          (order_by
+            (order_key
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          (measures
+            (measure
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (star_arg)))
+              (name
+                (identifier))))
+          (row_pattern
+            (pattern_alternation
+              (pattern_sequence
+                (pattern_group
+                  (pattern_alternation
+                    (pattern_sequence
+                      (pattern_variable
+                        (name_ref
+                          (identifier))))
+                    (pattern_sequence
+                      (pattern_variable
+                        (name_ref
+                          (identifier)))))
+                  (quantifier)))
+              (pattern_sequence
+                (pattern_variable
+                  (name_ref
+                    (identifier))))))
+          (define
+            (pattern_definition
+              (name
+                (identifier))
+              (literal))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_match_recognize
+        (match_recognize_clause
+          (order_by
+            (order_key
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          (measures
+            (measure
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (star_arg)))
+              (name
+                (identifier))))
+          (row_pattern)
+          (define
+            (pattern_definition
+              (name
+                (identifier))
+              (literal))))))))
+
+========================================================================
+Clause words as names after trailing commas
+========================================================================
+
+FROM t |> MATCH_RECOGNIZE (ORDER BY x, measures MEASURES pattern(x) AS p, COUNT(*) AS n PATTERN (a) DEFINE a AS TRUE)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_match_recognize
+        (match_recognize_clause
+          (order_by
+            (order_key
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))
+            (order_key
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          (measures
+            (measure
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (arg
+                    (path_expr
+                      (path
+                        (name_ref
+                          (identifier)))))))
+              (name
+                (identifier)))
+            (measure
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (star_arg)))
+              (name
+                (identifier))))
+          (row_pattern
+            (pattern_alternation
+              (pattern_sequence
+                (pattern_variable
+                  (name_ref
+                    (identifier))))))
+          (define
+            (pattern_definition
+              (name
+                (identifier))
+              (literal))))))))

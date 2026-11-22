@@ -5,6 +5,7 @@ import expressions from "./grammar/expressions.js";
 import { caseInsensitive } from "./grammar/helpers.js";
 import { RESERVED } from "./grammar/keywords.js";
 import lexical from "./grammar/lexical.js";
+import matchRecognize from "./grammar/match_recognize.js";
 import pipes from "./grammar/pipes.js";
 import queries from "./grammar/queries.js";
 import sources from "./grammar/sources.js";
@@ -35,15 +36,37 @@ export default grammar({
     // the window's frame.
     [$.order_by],
     [$.partition_by],
+    // In `MATCH_RECOGNIZE`, after a trailing comma of `MEASURES`, `AFTER` or `PATTERN` starts a
+    // measure or the next clause.
+    [$.measures],
+    // After a source, `PIVOT` or `UNPIVOT` is an alias, or starts a clause when `(` or
+    // `INCLUDE` or `EXCLUDE` follows it.
+    [$.table_source],
+    [$.subquery_source],
+    [$.unnest_source],
+    [$.tvf_source],
   ],
 
-  supertypes: $ => [$._stmt, $._expr, $._type, $._source, $._pipe_operator, $._select_entry, $._argument, $._in_set],
+  supertypes: $ => [
+    $._stmt,
+    $._expr,
+    $._type,
+    $._source,
+    $._pipe_operator,
+    $._select_entry,
+    $._argument,
+    $._in_set,
+    $._join_condition,
+    $._grouping_item,
+    $._pattern_term,
+  ],
 
   rules: {
     ...statements,
     ...queries,
     ...sources,
     ...pipes,
+    ...matchRecognize,
     ...expressions,
     ...types,
     ...lexical,

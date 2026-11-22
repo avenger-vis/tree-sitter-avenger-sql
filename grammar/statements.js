@@ -1,7 +1,7 @@
 // The roots, scripts and modules, and their statements. The statements other than queries
 // follow in the grammar's part on statements.
 
-import { kw } from "./helpers.js";
+import { commaSep, kw, kwAsName } from "./helpers.js";
 
 export default {
   // A file: a module, which starts with its `MODULE` statement, or a script. A chart script and
@@ -18,4 +18,12 @@ export default {
 
   // `MODULE path`
   module_stmt: $ => seq(kw("MODULE"), $.path),
+
+  // `OPTIONS (name = value, ...)`
+  options: $ => seq(kw("OPTIONS"), "(", commaSep($.option_entry), ")"),
+
+  // `name = value`. As in GoogleSQL, an option's name can also be `HASH`, `PROTO` or `PARTITION`.
+  option_entry: $ => seq(alias($._option_name, $.name), "=", $._expr),
+  _option_name: $ =>
+    choice($.identifier, $.quoted_identifier, ...["HASH", "PROTO", "PARTITION"].map(word => kwAsName($, word))),
 };

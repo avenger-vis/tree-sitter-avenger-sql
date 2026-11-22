@@ -1,0 +1,113 @@
+========================================================================
+A query in parentheses with an alias
+========================================================================
+
+(FROM t) AS q |> SELECT q.a
+
+---
+
+(source_file
+  (script
+    (query
+      (paren_query
+        (query
+          (from_clause
+            (table_source
+              (path
+                (name_ref
+                  (identifier)))))))
+      (alias
+        (name
+          (identifier)))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Nested queries in parentheses
+========================================================================
+
+FROM t |> WHERE ((FROM u)) = 1 AND ((FROM u) |> WHERE true) = 2 AND ((FROM u) + 1) = 3
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (bin_expr
+          lhs: (bin_expr
+            lhs: (bin_expr
+              lhs: (subquery_expr
+                (paren_query
+                  (query
+                    (paren_query
+                      (query
+                        (from_clause
+                          (table_source
+                            (path
+                              (name_ref
+                                (identifier))))))))))
+              rhs: (literal
+                (integer)))
+            rhs: (bin_expr
+              lhs: (subquery_expr
+                (paren_query
+                  (query
+                    (paren_query
+                      (query
+                        (from_clause
+                          (table_source
+                            (path
+                              (name_ref
+                                (identifier)))))))
+                    (pipe_where
+                      condition: (literal)))))
+              rhs: (literal
+                (integer))))
+          rhs: (bin_expr
+            lhs: (paren_expr
+              (bin_expr
+                lhs: (subquery_expr
+                  (paren_query
+                    (query
+                      (from_clause
+                        (table_source
+                          (path
+                            (name_ref
+                              (identifier))))))))
+                rhs: (literal
+                  (integer))))
+            rhs: (literal
+              (integer))))))))
+
+========================================================================
+A table followed by ( is a call
+========================================================================
+
+FROM f (1)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (tvf_source
+          (path
+            (name_ref
+              (identifier)))
+          (arg_list
+            (arg
+              (literal
+                (integer)))))))))

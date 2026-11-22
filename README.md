@@ -6,7 +6,7 @@ The tree follows avenger-sql-syntax's `sql.ungram`: each named node is a node of
 
 This is a tolerant editor parser. A tree without errors does not mean that a script is valid: avenger-sql-syntax and the analysis remain the authority, and the avenger language server reports their errors.
 
-The grammar is being rewritten for the current avenger-sql. It covers the lexical layer, the roots, types, every form of expression with GoogleSQL's operator precedence, calls with their clauses and windows, `FROM` with a table, `|> SELECT`, and `|> WHERE` so far.
+The grammar is being rewritten for the current avenger-sql. It covers the lexical layer, the roots, types, every form of expression with GoogleSQL's operator precedence, calls with their clauses and windows, and queries: every source and join, `PIVOT`, `UNPIVOT`, `TABLESAMPLE`, `MATCH_RECOGNIZE`, and every pipe operator. The statements other than queries and `MODULE` follow.
 
 ## Keywords
 
