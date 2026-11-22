@@ -1,6 +1,6 @@
 // Queries: a `FROM` clause, or a query in parentheses, and pipe operators.
 
-import { kw } from "./helpers.js";
+import { kw, kwAsName } from "./helpers.js";
 
 export default {
   // A query: a `FROM` clause, or a query in parentheses and its alias, and pipe operators. As in
@@ -14,6 +14,8 @@ export default {
   // `FROM source`
   from_clause: $ => seq(kw("FROM"), $._source, optional(",")),
 
-  // `[AS] name`
-  alias: $ => seq(optional(kw("AS")), $.name),
+  // `[AS] name`. `DECLARE`, `IMPORT`, and `LOAD` start a statement, which needs no `;` before it,
+  // and are a bare alias where a later token rules out the statement.
+  alias: $ => choice(seq(optional(kw("AS")), $.name), alias($._statement_word, $.name)),
+  _statement_word: $ => choice(kwAsName($, "DECLARE"), kwAsName($, "IMPORT"), kwAsName($, "LOAD")),
 };

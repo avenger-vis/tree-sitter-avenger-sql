@@ -39,6 +39,17 @@ export default grammar({
     // In `MATCH_RECOGNIZE`, after a trailing comma of `MEASURES`, `AFTER` or `PATTERN` starts a
     // measure or the next clause.
     [$.measures],
+    // Before `DECLARE`, `IMPORT`, or `LOAD`, an optional alias is that word, or a statement
+    // starts, since statements need no `;` between them.
+    [$.query],
+    [$.select_item],
+    [$.aggregate_item],
+    [$.group_item],
+    [$.with_offset],
+    [$.pivot_clause],
+    [$.unpivot_clause],
+    [$.weight],
+    [$.match_recognize_clause],
     // After a source, `PIVOT` or `UNPIVOT` is an alias, or starts a clause when `(` or
     // `INCLUDE` or `EXCLUDE` follows it.
     [$.table_source],
@@ -49,6 +60,7 @@ export default grammar({
 
   supertypes: $ => [
     $._stmt,
+    $._param_type,
     $._expr,
     $._type,
     $._source,

@@ -1,0 +1,273 @@
+========================================================================
+An operator without its keyword
+========================================================================
+
+FROM t |>
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier))))))
+    (ERROR)
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+An argument list without its closer takes the next FROM into its error
+========================================================================
+
+FROM t |> SELECT f(a, b
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))))
+      (ERROR
+        (arg
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (name_ref
+          (identifier))
+        (identifier))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A named argument without its value
+========================================================================
+
+FROM t |> SELECT f(x =>);
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (path_expr
+                  (path
+                    (name_ref
+                      (MISSING identifier))))))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A comparison without its right side
+========================================================================
+
+FROM t |> WHERE a =
+|> SELECT b;
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_where
+        condition: (path_expr
+          (path
+            (name_ref
+              (identifier)))))
+      (ERROR)
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A CREATE without its name
+========================================================================
+
+CREATE TEMP TABLE;
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (create_table_stmt
+      name: (path
+        (name_ref
+          (MISSING identifier))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A DECLARE without its name
+========================================================================
+
+DECLARE;
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (declare_stmt
+      name: (name
+        (MISSING identifier)))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A reserved word as a column
+========================================================================
+
+FROM t |> SELECT order, b;
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_join
+        (ERROR)
+        (join_op)
+        (table_source
+          (path
+            (name_ref
+              (identifier))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+An unfinished CASE
+========================================================================
+
+FROM t |> SELECT CASE WHEN a THEN 1;
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (case_expr
+            (when_clause
+              condition: (path_expr
+                (path
+                  (name_ref
+                    (identifier))))
+              result: (literal
+                (integer)))
+            (MISSING "END")))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))

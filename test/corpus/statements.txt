@@ -117,3 +117,667 @@ FROM t AS u, |> SELECT a b, c AS d,
           (alias
             (name
               (identifier))))))))
+
+========================================================================
+IMPORT MODULE
+========================================================================
+
+IMPORT MODULE charts.scales AS s OPTIONS (version = '1');
+IMPORT MODULE stats
+
+---
+
+(source_file
+  (script
+    (import_stmt
+      (path
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (alias
+        (name
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))))
+    (import_stmt
+      (path
+        (name_ref
+          (identifier))))))
+
+========================================================================
+DECLARE
+========================================================================
+
+DECLARE lo, hi INT64 DEFAULT 0;
+DECLARE k DEFAULT 2;
+DECLARE d DATE
+
+---
+
+(source_file
+  (script
+    (declare_stmt
+      name: (name
+        (identifier))
+      name: (name
+        (identifier))
+      (named_type
+        (name_ref
+          (identifier)))
+      (literal
+        (integer)))
+    (declare_stmt
+      name: (name
+        (identifier))
+      (literal
+        (integer)))
+    (declare_stmt
+      name: (name
+        (identifier))
+      (named_type
+        (name_ref
+          (identifier))))))
+
+========================================================================
+SET
+========================================================================
+
+SET x = 1;
+SET (a, b,) = (1, 2)
+
+---
+
+(source_file
+  (script
+    (set_stmt
+      (name_ref
+        (identifier))
+      (literal
+        (integer)))
+    (set_stmt
+      (name_list
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (tuple_expr
+        (literal
+          (integer))
+        (literal
+          (integer))))))
+
+========================================================================
+CREATE TABLE
+========================================================================
+
+CREATE TEMP TABLE t (a INT64 NOT NULL, b STRING,) OPTIONS (description = 'd') AS FROM u;
+CREATE OR REPLACE TABLE IF NOT EXISTS my-project.ds.t AS FROM u
+
+---
+
+(source_file
+  (script
+    (create_table_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (column_list
+        (column_def
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier))))
+        (column_def
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier)))))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content)))))
+      (query
+        (from_clause
+          (table_source
+            (path
+              (name_ref
+                (identifier)))))))
+    (create_table_stmt
+      name: (path
+        (name_ref
+          (identifier)
+          (identifier))
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (query
+        (from_clause
+          (table_source
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+CREATE FUNCTION
+========================================================================
+
+CREATE TEMP FUNCTION f(x INT64, y ANY TYPE NOT AGGREGATE,) RETURNS INT64 AS (x + 1);
+CREATE TEMP AGGREGATE FUNCTION g(x FLOAT64) OPTIONS (description = 'g') AS (SUM(x))
+
+---
+
+(source_file
+  (script
+    (create_function_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (param_list
+        (parameter
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier))))
+        (parameter
+          (name
+            (identifier))
+          (any_type)))
+      (returns_clause
+        (named_type
+          (name_ref
+            (identifier))))
+      (function_body
+        (bin_expr
+          lhs: (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          rhs: (literal
+            (integer)))))
+    (create_function_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (param_list
+        (parameter
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier)))))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content)))))
+      (function_body
+        (call_expr
+          (path
+            (name_ref
+              (identifier)))
+          (arg_list
+            (arg
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier)))))))))))
+
+========================================================================
+CREATE TABLE FUNCTION
+========================================================================
+
+CREATE TEMP TABLE FUNCTION h(t TABLE<a INT64,>, u ANY TABLE) RETURNS TABLE<a INT64> AS FROM t
+
+---
+
+(source_file
+  (script
+    (create_function_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (param_list
+        (parameter
+          (name
+            (identifier))
+          (table_type
+            (struct_field
+              (name
+                (identifier))
+              (named_type
+                (name_ref
+                  (identifier))))))
+        (parameter
+          (name
+            (identifier))
+          (any_table)))
+      (returns_clause
+        (table_type
+          (struct_field
+            (name
+              (identifier))
+            (named_type
+              (name_ref
+                (identifier))))))
+      (function_body
+        (query
+          (from_clause
+            (table_source
+              (path
+                (name_ref
+                  (identifier))))))))))
+
+========================================================================
+A function's options after its body
+========================================================================
+
+CREATE TEMP FUNCTION f(x INT64) AS (x) OPTIONS (description = 'after')
+
+---
+
+(source_file
+  (script
+    (create_function_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (param_list
+        (parameter
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier)))))
+      (function_body
+        (path_expr
+          (path
+            (name_ref
+              (identifier)))))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))))))
+
+========================================================================
+A module's statements
+========================================================================
+
+MODULE charts.scales OPTIONS (description = 'scales');
+CREATE PUBLIC FUNCTION scale(x FLOAT64) AS (x * 2);
+CREATE PRIVATE CONSTANT k = 3;
+CREATE PUBLIC TABLE FUNCTION all_rows() AS FROM t
+
+---
+
+(source_file
+  (module
+    (module_stmt
+      (path
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))))
+    (create_function_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (param_list
+        (parameter
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier)))))
+      (function_body
+        (bin_expr
+          lhs: (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          rhs: (literal
+            (integer)))))
+    (create_constant_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (literal
+        (integer)))
+    (create_function_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (param_list)
+      (function_body
+        (query
+          (from_clause
+            (table_source
+              (path
+                (name_ref
+                  (identifier))))))))))
+
+========================================================================
+CREATE EXTERNAL TABLE
+========================================================================
+
+CREATE TEMP EXTERNAL TABLE orders (id INT64) WITH PARTITION COLUMNS (day DATE) OPTIONS (format = 'CSV', uris = ['data/files/orders.csv']);
+CREATE EXTERNAL TABLE IF NOT EXISTS sales WITH PARTITION COLUMNS OPTIONS (format = 'PARQUET', uris = ['s3://b/*.parquet'])
+
+---
+
+(source_file
+  (script
+    (create_external_table_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (column_list
+        (column_def
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier)))))
+      (partition_columns
+        (column_list
+          (column_def
+            (name
+              (identifier))
+            (named_type
+              (name_ref
+                (identifier))))))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))
+        (option_entry
+          (name
+            (identifier))
+          (array_expr
+            (literal
+              (string
+                (string_content)))))))
+    (create_external_table_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (partition_columns)
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))
+        (option_entry
+          (name
+            (identifier))
+          (array_expr
+            (literal
+              (string
+                (string_content)))))))))
+
+========================================================================
+CREATE VIEW and SCHEMA
+========================================================================
+
+CREATE OR REPLACE VIEW v OPTIONS (description = 'v') AS FROM t |> WHERE x > 0;
+CREATE SCHEMA IF NOT EXISTS vega OPTIONS (description = 'vega')
+
+---
+
+(source_file
+  (script
+    (create_view_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content)))))
+      (query
+        (from_clause
+          (table_source
+            (path
+              (name_ref
+                (identifier)))))
+        (pipe_where
+          condition: (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (literal
+              (integer))))))
+    (create_schema_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))))))
+
+========================================================================
+LOAD DATA
+========================================================================
+
+LOAD DATA OVERWRITE vega.regions (id INT64) OPTIONS (description = 'r') FROM FILES (format = 'CSV', uris = ['a.csv'],) WITH PARTITION COLUMNS (day DATE);
+LOAD DATA INTO TEMP TABLE staged FROM FILES (format = 'JSON', uris = ['b.json'])
+
+---
+
+(source_file
+  (script
+    (load_data_stmt
+      name: (path
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (column_list
+        (column_def
+          (name
+            (identifier))
+          (named_type
+            (name_ref
+              (identifier)))))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content)))))
+      (from_files
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))
+        (option_entry
+          (name
+            (identifier))
+          (array_expr
+            (literal
+              (string
+                (string_content))))))
+      (partition_columns
+        (column_list
+          (column_def
+            (name
+              (identifier))
+            (named_type
+              (name_ref
+                (identifier)))))))
+    (load_data_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (from_files
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))
+        (option_entry
+          (name
+            (identifier))
+          (array_expr
+            (literal
+              (string
+                (string_content)))))))))
+
+========================================================================
+LOAD DATA into a table named temp
+========================================================================
+
+LOAD DATA INTO temp FROM FILES (format = 'CSV', uris = ['a.csv']);
+LOAD DATA INTO temp.x FROM FILES (format = 'CSV', uris = ['a.csv'])
+
+---
+
+(source_file
+  (script
+    (load_data_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (from_files
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))
+        (option_entry
+          (name
+            (identifier))
+          (array_expr
+            (literal
+              (string
+                (string_content)))))))
+    (load_data_stmt
+      name: (path
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (from_files
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))
+        (option_entry
+          (name
+            (identifier))
+          (array_expr
+            (literal
+              (string
+                (string_content)))))))))
+
+========================================================================
+Options named HASH, PROTO, and PARTITION
+========================================================================
+
+CREATE SCHEMA s OPTIONS (hash = 1, proto = 2, partition = 3)
+
+---
+
+(source_file
+  (script
+    (create_schema_stmt
+      name: (path
+        (name_ref
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (integer)))
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (integer)))
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (integer)))))))
+
+========================================================================
+Statement words as bare aliases
+========================================================================
+
+FROM t declare |> SELECT a import, b load
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))
+          (alias
+            (name
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          (alias
+            (name
+              (identifier))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          (alias
+            (name
+              (identifier))))))))
