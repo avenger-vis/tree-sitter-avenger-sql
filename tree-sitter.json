@@ -9,6 +9,8 @@
         "av.sql",
         "av.sqlm"
       ],
+      "highlights": "queries/highlights.scm",
+      "injections": "queries/injections.scm",
       "injection-regex": "^avenger-sql$"
     }
   ],
