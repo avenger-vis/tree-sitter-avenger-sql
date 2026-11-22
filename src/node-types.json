@@ -186,6 +186,28 @@
     ]
   },
   {
+    "type": "_param_type",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "_type",
+        "named": true
+      },
+      {
+        "type": "any_table",
+        "named": true
+      },
+      {
+        "type": "any_type",
+        "named": true
+      },
+      {
+        "type": "table_type",
+        "named": true
+      }
+    ]
+  },
+  {
     "type": "_pattern_term",
     "named": true,
     "subtypes": [
@@ -350,7 +372,47 @@
     "named": true,
     "subtypes": [
       {
+        "type": "create_constant_stmt",
+        "named": true
+      },
+      {
+        "type": "create_external_table_stmt",
+        "named": true
+      },
+      {
+        "type": "create_function_stmt",
+        "named": true
+      },
+      {
+        "type": "create_schema_stmt",
+        "named": true
+      },
+      {
+        "type": "create_table_stmt",
+        "named": true
+      },
+      {
+        "type": "create_view_stmt",
+        "named": true
+      },
+      {
+        "type": "declare_stmt",
+        "named": true
+      },
+      {
+        "type": "import_stmt",
+        "named": true
+      },
+      {
+        "type": "load_data_stmt",
+        "named": true
+      },
+      {
         "type": "query",
+        "named": true
+      },
+      {
+        "type": "set_stmt",
         "named": true
       }
     ]
@@ -442,6 +504,16 @@
         }
       ]
     }
+  },
+  {
+    "type": "any_table",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "any_type",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "arg",
@@ -823,6 +895,40 @@
     }
   },
   {
+    "type": "column_def",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "_type",
+          "named": true
+        },
+        {
+          "type": "name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "column_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "column_def",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "corresponding",
     "named": true,
     "fields": {},
@@ -838,6 +944,326 @@
     }
   },
   {
+    "type": "create_constant_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "PRIVATE",
+            "named": false
+          },
+          {
+            "type": "PUBLIC",
+            "named": false
+          },
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_external_table_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "PRIVATE",
+            "named": false
+          },
+          {
+            "type": "PUBLIC",
+            "named": false
+          },
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_list",
+          "named": true
+        },
+        {
+          "type": "options",
+          "named": true
+        },
+        {
+          "type": "partition_columns",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_function_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "PRIVATE",
+            "named": false
+          },
+          {
+            "type": "PUBLIC",
+            "named": false
+          },
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "function_body",
+          "named": true
+        },
+        {
+          "type": "options",
+          "named": true
+        },
+        {
+          "type": "param_list",
+          "named": true
+        },
+        {
+          "type": "returns_clause",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_schema_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "PRIVATE",
+            "named": false
+          },
+          {
+            "type": "PUBLIC",
+            "named": false
+          },
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "options",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_table_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "PRIVATE",
+            "named": false
+          },
+          {
+            "type": "PUBLIC",
+            "named": false
+          },
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "column_list",
+          "named": true
+        },
+        {
+          "type": "options",
+          "named": true
+        },
+        {
+          "type": "query",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "create_view_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "PRIVATE",
+            "named": false
+          },
+          {
+            "type": "PUBLIC",
+            "named": false
+          },
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "options",
+          "named": true
+        },
+        {
+          "type": "query",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "cube",
     "named": true,
     "fields": {},
@@ -847,6 +1273,36 @@
       "types": [
         {
           "type": "_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "declare_stmt",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_expr",
+          "named": true
+        },
+        {
+          "type": "_type",
           "named": true
         }
       ]
@@ -1135,6 +1591,40 @@
     }
   },
   {
+    "type": "from_files",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "option_entry",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "function_body",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_expr",
+          "named": true
+        },
+        {
+          "type": "query",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "group_by",
     "named": true,
     "fields": {},
@@ -1214,6 +1704,29 @@
       "types": [
         {
           "type": "_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "import_stmt",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "alias",
+          "named": true
+        },
+        {
+          "type": "options",
+          "named": true
+        },
+        {
+          "type": "path",
           "named": true
         }
       ]
@@ -1484,6 +1997,72 @@
     }
   },
   {
+    "type": "load_data_stmt",
+    "named": true,
+    "fields": {
+      "mode": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "INTO",
+            "named": false
+          },
+          {
+            "type": "OVERWRITE",
+            "named": false
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "path",
+            "named": true
+          }
+        ]
+      },
+      "scope": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "TEMP",
+            "named": false
+          },
+          {
+            "type": "TEMPORARY",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "column_list",
+          "named": true
+        },
+        {
+          "type": "from_files",
+          "named": true
+        },
+        {
+          "type": "options",
+          "named": true
+        },
+        {
+          "type": "partition_columns",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "match_recognize_clause",
     "named": true,
     "fields": {},
@@ -1603,9 +2182,13 @@
     "named": true,
     "fields": {},
     "children": {
-      "multiple": false,
+      "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "options",
+          "named": true
+        },
         {
           "type": "path",
           "named": true
@@ -1911,6 +2494,40 @@
     }
   },
   {
+    "type": "param_list",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "parameter",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "parameter",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "_param_type",
+          "named": true
+        },
+        {
+          "type": "name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "paren_expr",
     "named": true,
     "fields": {},
@@ -1965,6 +2582,21 @@
       "types": [
         {
           "type": "_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "partition_columns",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "column_list",
           "named": true
         }
       ]
@@ -2719,6 +3351,25 @@
     }
   },
   {
+    "type": "returns_clause",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "_type",
+          "named": true
+        },
+        {
+          "type": "table_type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "rollup",
     "named": true,
     "fields": {},
@@ -2863,6 +3514,29 @@
     "type": "set_op_mode",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "set_stmt",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "_expr",
+          "named": true
+        },
+        {
+          "type": "name_list",
+          "named": true
+        },
+        {
+          "type": "name_ref",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "source_file",
@@ -3065,6 +3739,21 @@
         },
         {
           "type": "with_offset",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "table_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "struct_field",
           "named": true
         }
       ]
@@ -3638,7 +4327,19 @@
     "named": false
   },
   {
+    "type": "COLUMNS",
+    "named": false
+  },
+  {
+    "type": "CONSTANT",
+    "named": false
+  },
+  {
     "type": "CORRESPONDING",
+    "named": false
+  },
+  {
+    "type": "CREATE",
     "named": false
   },
   {
@@ -3654,6 +4355,10 @@
     "named": false
   },
   {
+    "type": "DATA",
+    "named": false
+  },
+  {
     "type": "DATE",
     "named": false
   },
@@ -3663,6 +4368,14 @@
   },
   {
     "type": "DECIMAL",
+    "named": false
+  },
+  {
+    "type": "DECLARE",
+    "named": false
+  },
+  {
+    "type": "DEFAULT",
     "named": false
   },
   {
@@ -3706,11 +4419,19 @@
     "named": false
   },
   {
+    "type": "EXTERNAL",
+    "named": false
+  },
+  {
     "type": "EXTRACT",
     "named": false
   },
   {
     "type": "FALSE",
+    "named": false
+  },
+  {
+    "type": "FILES",
     "named": false
   },
   {
@@ -3738,6 +4459,10 @@
     "named": false
   },
   {
+    "type": "FUNCTION",
+    "named": false
+  },
+  {
     "type": "GROUP",
     "named": false
   },
@@ -3750,7 +4475,15 @@
     "named": false
   },
   {
+    "type": "IF",
+    "named": false
+  },
+  {
     "type": "IGNORE",
+    "named": false
+  },
+  {
+    "type": "IMPORT",
     "named": false
   },
   {
@@ -3771,6 +4504,10 @@
   },
   {
     "type": "INTERVAL",
+    "named": false
+  },
+  {
+    "type": "INTO",
     "named": false
   },
   {
@@ -3803,6 +4540,10 @@
   },
   {
     "type": "LIMIT",
+    "named": false
+  },
+  {
+    "type": "LOAD",
     "named": false
   },
   {
@@ -3886,6 +4627,10 @@
     "named": false
   },
   {
+    "type": "OVERWRITE",
+    "named": false
+  },
+  {
     "type": "PARTITION",
     "named": false
   },
@@ -3910,6 +4655,14 @@
     "named": false
   },
   {
+    "type": "PRIVATE",
+    "named": false
+  },
+  {
+    "type": "PUBLIC",
+    "named": false
+  },
+  {
     "type": "RANGE",
     "named": false
   },
@@ -3930,6 +4683,10 @@
     "named": false
   },
   {
+    "type": "RETURNS",
+    "named": false
+  },
+  {
     "type": "RIGHT",
     "named": false
   },
@@ -3947,6 +4704,10 @@
   },
   {
     "type": "SAFE_CAST",
+    "named": false
+  },
+  {
+    "type": "SCHEMA",
     "named": false
   },
   {
@@ -3986,6 +4747,14 @@
     "named": false
   },
   {
+    "type": "TEMP",
+    "named": false
+  },
+  {
+    "type": "TEMPORARY",
+    "named": false
+  },
+  {
     "type": "THEN",
     "named": false
   },
@@ -4003,6 +4772,10 @@
   },
   {
     "type": "TRUE",
+    "named": false
+  },
+  {
+    "type": "TYPE",
     "named": false
   },
   {
@@ -4031,6 +4804,10 @@
   },
   {
     "type": "VALUE",
+    "named": false
+  },
+  {
+    "type": "VIEW",
     "named": false
   },
   {

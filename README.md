@@ -6,7 +6,7 @@ The tree follows avenger-sql-syntax's `sql.ungram`: each named node is a node of
 
 This is a tolerant editor parser. A tree without errors does not mean that a script is valid: avenger-sql-syntax and the analysis remain the authority, and the avenger language server reports their errors.
 
-The grammar is being rewritten for the current avenger-sql. It covers the lexical layer, the roots, types, every form of expression with GoogleSQL's operator precedence, calls with their clauses and windows, and queries: every source and join, `PIVOT`, `UNPIVOT`, `TABLESAMPLE`, `MATCH_RECOGNIZE`, and every pipe operator. The statements other than queries and `MODULE` follow.
+The grammar covers the whole syntax of `sql.ungram`: the statements of chart scripts, data scripts, and modules, every source, join, and pipe operator, `PIVOT`, `UNPIVOT`, `TABLESAMPLE`, `MATCH_RECOGNIZE`, every form of expression with GoogleSQL's operator precedence, and types. Its queries for highlighting and injections follow.
 
 ## Keywords
 
@@ -36,7 +36,7 @@ npm run measure -- --check
 npm run build:wasm
 ```
 
-`npm test` runs the corpus in `test/corpus/`. `npm run test:scanner` runs the scanner under the address and undefined-behavior sanitizers. `npm run measure -- --write` records the parser's size in `test/metrics/current.json`, which CI compares.
+`npm test` runs the corpus in `test/corpus/`, including `recovery.txt`, which records how the parser recovers from the unfinished text of typing. `npm run test:scanner` runs the scanner under the address and undefined-behavior sanitizers. `npm run measure -- --write` records the parser's size in `test/metrics/current.json`, which CI compares.
 
 Rust:
 

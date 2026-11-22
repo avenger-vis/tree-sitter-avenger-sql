@@ -5,8 +5,9 @@ import { commaSep, kw } from "./helpers.js";
 export default {
   _type: $ => choice($.named_type, $.array_type, $.struct_type, $.range_type),
 
-  // A type by its name, such as `INT64` or `STRING(10)`, or `INTERVAL`.
-  named_type: $ => seq(choice($.name_ref, kw("INTERVAL")), optional($.type_params)),
+  // A type by its name, such as `INT64` or `STRING(10)`, or `INTERVAL`. A type can end a
+  // statement, and `(` after it is its parameters, not a statement in parentheses.
+  named_type: $ => prec.right(seq(choice($.name_ref, kw("INTERVAL")), optional($.type_params))),
 
   // `(parameter, ...)` of a type: literals or `MAX`.
   type_params: $ => seq("(", commaSep(choice($.literal, kw("MAX"))), ")"),
