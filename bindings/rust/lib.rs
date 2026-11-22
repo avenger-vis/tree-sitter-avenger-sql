@@ -1,8 +1,9 @@
-//! Tree-sitter grammar for Avenger's read-only SQL query and scalar-expression
-//! surface.
+//! The Tree-sitter grammar of avenger-sql: chart scripts, data scripts, and modules, in the
+//! subset of GoogleSQL that avenger-sql-syntax parses. Its named nodes are the nodes of
+//! avenger-sql-syntax's `sql.ungram`, in snake case.
 //!
-//! The parser is intentionally tolerant and intended for editor tooling. The
-//! Avenger compiler remains the authority for syntax and semantics.
+//! The parser is a tolerant editor parser. avenger-sql-syntax and the analysis remain the
+//! authority on whether a script is valid.
 
 use tree_sitter_language::LanguageFn;
 
@@ -16,9 +17,6 @@ pub const LANGUAGE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_aveng
 /// The generated public node contract.
 pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 
-/// Syntax-highlight query for the standalone SQL grammar.
-pub const HIGHLIGHTS_QUERY: &str = include_str!("../../queries/highlights.scm");
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -26,6 +24,6 @@ mod tests {
         let mut parser = tree_sitter::Parser::new();
         parser
             .set_language(&super::LANGUAGE.into())
-            .expect("Avenger SQL language must load");
+            .expect("the avenger-sql language loads");
     }
 }

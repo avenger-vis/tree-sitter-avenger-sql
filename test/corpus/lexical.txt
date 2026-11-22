@@ -1,0 +1,477 @@
+========================================================================
+Line comments, block comments, and doc comments
+========================================================================
+
+--| Documents the query.
+-- a comment
+# a comment
+/* a
+   block */
+FROM t
+
+---
+
+(source_file
+  (doc_comment)
+  (comment)
+  (comment)
+  (comment)
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier))))))))
+
+========================================================================
+Unicode whitespace
+========================================================================
+
+FROM t |>　SELECT a
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Hints are extras
+========================================================================
+
+FROM t @{join_method=hash} |> SELECT a
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (hint)
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Quoted identifiers
+========================================================================
+
+FROM `my table` |> SELECT `a column`, `with \` escape`
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (quoted_identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (quoted_identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (quoted_identifier)))))))))
+
+========================================================================
+A field name that starts with a digit
+========================================================================
+
+FROM t |> SELECT t.2023, t.`2024`
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (quoted_identifier)))))))))
+
+========================================================================
+Integers and floats
+========================================================================
+
+FROM t |> SELECT 1, 0x1F, 0XaB, 1., .5, 1.5, 1e10, 1.5E-3, .5e+2
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))
+        (select_item
+          (literal
+            (integer)))
+        (select_item
+          (literal
+            (integer)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))
+        (select_item
+          (literal
+            (float)))))))
+
+========================================================================
+Query parameters
+========================================================================
+
+FROM t |> SELECT @p, @ spaced, @`quoted name`, ?
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (param_expr
+            (param)))
+        (select_item
+          (param_expr
+            (param)))
+        (select_item
+          (param_expr
+            (param)))
+        (select_item
+          (param_expr))))))
+
+========================================================================
+Single and double quotes
+========================================================================
+
+FROM t |> SELECT 'single', "double", '', ""
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string)))
+        (select_item
+          (literal
+            (string)))))))
+
+========================================================================
+Triple quotes
+========================================================================
+
+FROM t |> SELECT '''one ' two '' three''', """a "b" """, '''''', '''a
+b'''
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string)))
+        (select_item
+          (literal
+            (string
+              (string_content))))))))
+
+========================================================================
+Raw strings
+========================================================================
+
+FROM t |> SELECT r'a\nb', R"\"", r'''raw\'''
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))))))))
+
+========================================================================
+Bytes
+========================================================================
+
+FROM t |> SELECT b'bytes', B"bytes", rb'raw\x00', BR"raw", b''
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (bytes)))))))
+
+========================================================================
+Escape sequences
+========================================================================
+
+FROM t |> SELECT 'a\nb\t\'\\', '\x41\X4a', '\u00e9\U0001F600', '\101\7'
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)
+                (escape_sequence)
+                (escape_sequence)))))
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)))))
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)))))
+        (select_item
+          (literal
+            (string
+              (string_content
+                (escape_sequence)
+                (escape_sequence)))))))))
+
+========================================================================
+Adjacent strings concatenate
+========================================================================
+
+FROM t |> SELECT 'a' 'b' "c", b'x' b'y', 'it''s'
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))
+            (string
+              (string_content))
+            (string
+              (string_content))))
+        (select_item
+          (literal
+            (bytes
+              (string_content))
+            (bytes
+              (string_content))))
+        (select_item
+          (literal
+            (string
+              (string_content))
+            (string
+              (string_content))))))))
+
+========================================================================
+A string without its closing quote ends at the line end
+========================================================================
+
+FROM t |> SELECT 'unclosed
+FROM u |> SELECT 1
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (integer)))))))
+
+========================================================================
+A triple string without its closing quotes ends at the end of the input
+========================================================================
+
+FROM t |> SELECT '''open
+still open
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (literal
+            (string
+              (string_content))))))))

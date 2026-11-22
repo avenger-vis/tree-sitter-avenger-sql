@@ -22,9 +22,27 @@ jobs:
       - run: npm ci
       - run: npm run check-generated
       - run: npm test
-      - run: npm run test:highlights
       - run: npm run measure -- --check
       - run: npm pack --dry-run
+
+  keywords:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tree-sitter-avenger-sql
+      - uses: actions/checkout@v4
+        with:
+          repository: jonmmease/avenger
+          ref: df17e4f2f7c1819419222475d301957785d4961c
+          path: avenger
+          sparse-checkout: avenger-sql-syntax/src/syntax_kind.rs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - working-directory: tree-sitter-avenger-sql
+        run: node scripts/sync_keywords.mjs --avenger-root ../avenger --check
 
   rust:
     strategy:

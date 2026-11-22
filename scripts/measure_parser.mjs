@@ -11,7 +11,7 @@ const define = name => {
 };
 const metrics = {
   grammar: "avenger_sql",
-  tree_sitter_cli: "0.26.3",
+  tree_sitter_cli: "0.27.2",
   abi_version: define("LANGUAGE_VERSION"),
   state_count: define("STATE_COUNT"),
   large_state_count: define("LARGE_STATE_COUNT"),

@@ -1,0 +1,398 @@
+========================================================================
+Keywords in any case
+========================================================================
+
+from t |> SeLeCt a
+FROM u |> SELECT b
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+A reserved word is not an alias
+:error
+========================================================================
+
+FROM t |> SELECT a where
+
+---
+
+(source_file)
+
+========================================================================
+A reserved word is not a column
+:error
+========================================================================
+
+FROM t |> SELECT order
+
+---
+
+(source_file)
+
+========================================================================
+Non-reserved keywords are names where the keyword is not valid
+========================================================================
+
+FROM aggregate |> SELECT offset, extend, t.module
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))))))
+
+========================================================================
+Reserved words as argument names
+========================================================================
+
+FROM t |> SELECT foo(range => 1, where => 2, ORDER => 3, From => 4)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer))))))))))
+
+========================================================================
+Keywords that start values as argument names
+========================================================================
+
+FROM t |> SELECT foo(null => 1, true => 2, date => 3, if => 4, select => 5)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer)))
+              (named_arg
+                name: (name_ref
+                  (identifier))
+                value: (literal
+                  (integer))))))))))
+
+========================================================================
+A reserved word without => is not an argument
+:error
+========================================================================
+
+FROM t |> SELECT foo(where)
+
+---
+
+(source_file)
+
+========================================================================
+Typed literals and the same words as names
+========================================================================
+
+FROM t |> SELECT DATE '2024-01-01', date, Timestamp, json AS j, NUMERIC '1.5' '0'
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (typed_literal
+            (string
+              (string_content))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          (alias
+            (name
+              (identifier))))
+        (select_item
+          (typed_literal
+            (string
+              (string_content))
+            (string
+              (string_content))))))))
+
+========================================================================
+Calls on reserved words
+========================================================================
+
+FROM t |> SELECT if(a, b, c), left(s, 1), RANGE(1, 2), select(x), interval(y)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))
+              (arg
+                (literal
+                  (integer))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (literal
+                  (integer)))
+              (arg
+                (literal
+                  (integer))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))))))
+
+========================================================================
+Calls without parentheses
+========================================================================
+
+FROM t |> SELECT current_date, CURRENT_TIMESTAMP, count(*)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (star_arg))))))))
+
+========================================================================
+A quoted name is a name
+========================================================================
+
+FROM t |> SELECT `select`, foo(`where` => 1)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (quoted_identifier)))))
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (named_arg
+                name: (name_ref
+                  (quoted_identifier))
+                value: (literal
+                  (integer))))))))))

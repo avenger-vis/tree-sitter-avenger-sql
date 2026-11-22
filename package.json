@@ -1,7 +1,7 @@
 {
   "name": "@avenger-vis/tree-sitter-avenger-sql",
   "version": "0.1.0",
-  "description": "Tree-sitter grammar for Avenger SQL queries and expressions",
+  "description": "The Tree-sitter grammar of avenger-sql",
   "type": "module",
   "main": "grammar.js",
   "exports": {
@@ -16,7 +16,8 @@
     "check-generated": "sh scripts/check_generated.sh",
     "build:wasm": "node scripts/build_wasm.mjs",
     "measure": "node scripts/measure_parser.mjs",
-    "test:scanner": "sh scripts/test_scanner_sanitizers.sh"
+    "test:scanner": "sh scripts/test_scanner_sanitizers.sh",
+    "sync-keywords": "node scripts/sync_keywords.mjs"
   },
   "license": "MIT",
   "author": "Jon Mease",
@@ -33,17 +34,15 @@
   "files": [
     "bindings/c/**",
     "bindings/rust/**",
-    "docs/**",
     "grammar.js",
     "grammar/**",
     "LICENSE",
     "queries/**",
     "README.md",
     "src/**",
-    "tree-sitter.json",
-    "UPSTREAM.md"
+    "tree-sitter.json"
   ],
   "devDependencies": {
-    "tree-sitter-cli": "0.26.3"
+    "tree-sitter-cli": "0.27.2"
   }
 }
