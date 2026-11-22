@@ -27,10 +27,11 @@ const TYPED_LITERALS = [
   "DATE", "TIME", "DATETIME", "TIMESTAMP", "NUMERIC", "DECIMAL", "BIGNUMERIC", "BIGDECIMAL", "JSON",
 ];
 
-// The non-reserved keywords that start an expression or an argument, which are names where a
-// later token rules out that reading: the words of typed literals, `SAFE_CAST`, and `TABLE` of
-// a table argument.
-const NAME_KEYWORDS = [...TYPED_LITERALS, "SAFE_CAST", "TABLE"];
+// The non-reserved keywords that are names where a later token rules out their keyword's
+// reading: the words of typed literals, `SAFE_CAST`, and `TABLE` of a table argument, which start
+// an expression or an argument, and `MEASURES`, `AFTER`, and `PATTERN`, which start a clause of
+// `MATCH_RECOGNIZE` after a trailing comma, where a key or a measure can also start.
+const NAME_KEYWORDS = [...TYPED_LITERALS, "SAFE_CAST", "TABLE", "MEASURES", "AFTER", "PATTERN"];
 
 // The reserved words that are calls before `(`: GoogleSQL's, and avenger-sql's `SELECT(` and
 // `INTERVAL(`.
@@ -256,8 +257,9 @@ export default {
   // `(expression)`
   paren_expr: $ => seq("(", $._expr, ")"),
 
-  // `(query)` as a value.
-  subquery_expr: $ => $.paren_query,
+  // `(query)` as a value. Where a query in parentheses can also be the start of a query, as in
+  // `((FROM t))`, the query reads first, as in avenger-sql-syntax.
+  subquery_expr: $ => prec(-1, $.paren_query),
 
   // `EXISTS (query)`
   exists_expr: $ => seq(kw("EXISTS"), $.paren_query),
@@ -270,9 +272,12 @@ export default {
 
   // A call: `path(arguments) [OVER window]`, a reserved word's call such as `IF(...)`, or a
   // function that GoogleSQL calls without parentheses, such as `CURRENT_DATE`.
+  //
+  // A path followed by `(` is always a call, as in avenger-sql-syntax, not a path and a statement
+  // in parentheses after it.
   call_expr: $ =>
     choice(
-      seq($.path, $.arg_list, optional($.over_clause)),
+      prec(PREC.postfix, seq($.path, $.arg_list, optional($.over_clause))),
       seq(alias($._reserved_call_path, $.path), $.arg_list, optional($.over_clause)),
       alias($._bare_call_path, $.path),
     ),
@@ -334,6 +339,8 @@ export default {
   partition_by: $ => seq(kw("PARTITION"), kw("BY"), commaSep1($._expr)),
 
   // `ORDER BY keys`
+  // A declared conflict, not associativity, settles what follows a trailing comma: `RANGE` can
+  // start a key or a window's frame, and `(` a key or, after `|> ORDER BY`, a statement.
   order_by: $ => seq(kw("ORDER"), kw("BY"), commaSep1($.order_key)),
 
   // `expression [ASC | DESC] [NULLS {FIRST | LAST}]`

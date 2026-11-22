@@ -1,0 +1,653 @@
+========================================================================
+SELECT with DISTINCT, AS STRUCT, and WINDOW
+========================================================================
+
+FROM t |> SELECT DISTINCT a, b, |> SELECT ALL AS STRUCT x |> SELECT SUM(x) OVER w WINDOW w AS (ORDER BY y), v AS w
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))))
+      (pipe_select
+        (select_as)
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier))))))
+      (pipe_select
+        (select_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))
+            (over_clause
+              (name_ref
+                (identifier)))))
+        (window_clause
+          (named_window
+            (name
+              (identifier))
+            (window_spec
+              (order_by
+                (order_key
+                  (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))))))
+          (named_window
+            (name
+              (identifier))
+            (name_ref
+              (identifier))))))))
+
+========================================================================
+Wildcards
+========================================================================
+
+FROM t |> SELECT *, t.* EXCEPT (a, b,), f(x).*, (s).* REPLACE (1 AS b, 2 AS c,)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (wildcard)
+        (wildcard
+          (path
+            (name_ref
+              (identifier)))
+          (except_list
+            (name_list
+              (name_ref
+                (identifier))
+              (name_ref
+                (identifier)))))
+        (wildcard
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier))))))))
+        (wildcard
+          (paren_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier)))))
+          (replace_list
+            (replace_item
+              (literal
+                (integer))
+              (name
+                (identifier)))
+            (replace_item
+              (literal
+                (integer))
+              (name
+                (identifier)))))))))
+
+========================================================================
+EXTEND, SET, DROP, RENAME, and AS
+========================================================================
+
+FROM t |> EXTEND a + 1 AS b, |> SET a = 1, b = 2, |> DROP a, b, |> RENAME a AS x, b y, |> AS u
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_extend
+        (select_item
+          (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            rhs: (literal
+              (integer)))
+          (alias
+            (name
+              (identifier)))))
+      (pipe_set
+        (assignment
+          (name_ref
+            (identifier))
+          (literal
+            (integer)))
+        (assignment
+          (name_ref
+            (identifier))
+          (literal
+            (integer))))
+      (pipe_drop
+        (name_ref
+          (identifier))
+        (name_ref
+          (identifier)))
+      (pipe_rename
+        (rename_item
+          (name_ref
+            (identifier))
+          (name
+            (identifier)))
+        (rename_item
+          (name_ref
+            (identifier))
+          (name
+            (identifier))))
+      (pipe_as
+        (name
+          (identifier))))))
+
+========================================================================
+AGGREGATE with GROUP BY
+========================================================================
+
+FROM t |> AGGREGATE COUNT(*) AS n, SUM(x) DESC NULLS LAST GROUP AND ORDER BY a ASC, b AS c NULLS FIRST,
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_aggregate
+        (aggregate_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (star_arg)))
+          (alias
+            (name
+              (identifier))))
+        (aggregate_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))))
+          (order_suffix))
+        (group_by
+          (group_item
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (order_suffix))
+          (group_item
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (alias
+              (name
+                (identifier)))
+            (order_suffix)))))))
+
+========================================================================
+AGGREGATE without items, and grouping sets
+========================================================================
+
+FROM t |> AGGREGATE GROUP BY ROLLUP(a, b), CUBE(c), GROUPING SETS ((), a, ROLLUP(b)), ()
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_aggregate
+        (group_by
+          (rollup
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (path_expr
+              (path
+                (name_ref
+                  (identifier)))))
+          (cube
+            (path_expr
+              (path
+                (name_ref
+                  (identifier)))))
+          (grouping_sets
+            (grouping_empty)
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))
+            (rollup
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          (grouping_empty))))))
+
+========================================================================
+An aggregate item's wildcard
+========================================================================
+
+FROM t |> AGGREGATE ANY_VALUE(s).* REPLACE (1 AS b)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_aggregate
+        (aggregate_item
+          (call_expr
+            (path
+              (name_ref
+                (identifier)))
+            (arg_list
+              (arg
+                (path_expr
+                  (path
+                    (name_ref
+                      (identifier)))))))
+          (wildcard
+            (replace_list
+              (replace_item
+                (literal
+                  (integer))
+                (name
+                  (identifier))))))))))
+
+========================================================================
+DISTINCT, ORDER BY, and LIMIT
+========================================================================
+
+FROM t |> DISTINCT |> ORDER BY a DESC, b NULLS FIRST, |> LIMIT 10 OFFSET 5
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_distinct)
+      (pipe_order_by
+        (order_by
+          (order_key
+            (path_expr
+              (path
+                (name_ref
+                  (identifier)))))
+          (order_key
+            (path_expr
+              (path
+                (name_ref
+                  (identifier)))))))
+      (pipe_limit
+        count: (literal
+          (integer))
+        (limit_offset
+          (literal
+            (integer)))))))
+
+========================================================================
+Set operations
+========================================================================
+
+FROM t |> UNION ALL (FROM u), (FROM v), |> LEFT OUTER INTERSECT DISTINCT BY NAME ON (a) (FROM w) |> UNION ALL STRICT CORRESPONDING BY (a, b,) (FROM x) |> EXCEPT DISTINCT CORRESPONDING (FROM y)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_set_operation
+        (paren_query
+          (query
+            (from_clause
+              (table_source
+                (path
+                  (name_ref
+                    (identifier)))))))
+        (paren_query
+          (query
+            (from_clause
+              (table_source
+                (path
+                  (name_ref
+                    (identifier))))))))
+      (pipe_set_operation
+        (set_op_mode)
+        (by_name
+          (name_list
+            (name_ref
+              (identifier))))
+        (paren_query
+          (query
+            (from_clause
+              (table_source
+                (path
+                  (name_ref
+                    (identifier))))))))
+      (pipe_set_operation
+        (corresponding
+          (name_list
+            (name_ref
+              (identifier))
+            (name_ref
+              (identifier))))
+        (paren_query
+          (query
+            (from_clause
+              (table_source
+                (path
+                  (name_ref
+                    (identifier))))))))
+      (pipe_set_operation
+        (corresponding)
+        (paren_query
+          (query
+            (from_clause
+              (table_source
+                (path
+                  (name_ref
+                    (identifier)))))))))))
+
+========================================================================
+Pipe joins
+========================================================================
+
+FROM t |> LEFT JOIN u USING (k) |> CROSS JOIN v |> JOIN w ON t.k = w.k
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_join
+        (join_op)
+        (table_source
+          (path
+            (name_ref
+              (identifier))))
+        (using_condition
+          (name_list
+            (name_ref
+              (identifier)))))
+      (pipe_join
+        (join_op)
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_join
+        (join_op)
+        (table_source
+          (path
+            (name_ref
+              (identifier))))
+        (on_condition
+          (bin_expr
+            lhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))
+                (name_ref
+                  (identifier))))
+            rhs: (path_expr
+              (path
+                (name_ref
+                  (identifier))
+                (name_ref
+                  (identifier))))))))))
+
+========================================================================
+CALL, TABLESAMPLE, and WITH
+========================================================================
+
+FROM t |> CALL f(TABLE u, 1) AS r |> TABLESAMPLE SYSTEM (1 PERCENT) |> WITH a AS (FROM u), b AS (FROM v),
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_call
+        (path
+          (name_ref
+            (identifier)))
+        (arg_list
+          (table_arg
+            (path
+              (name_ref
+                (identifier))))
+          (arg
+            (literal
+              (integer))))
+        (alias
+          (name
+            (identifier))))
+      (pipe_sample
+        (sample_clause
+          method: (name_ref
+            (identifier))
+          (sample_size
+            (literal
+              (integer)))))
+      (pipe_with
+        (named_query
+          (name
+            (identifier))
+          (paren_query
+            (query
+              (from_clause
+                (table_source
+                  (path
+                    (name_ref
+                      (identifier))))))))
+        (named_query
+          (name
+            (identifier))
+          (paren_query
+            (query
+              (from_clause
+                (table_source
+                  (path
+                    (name_ref
+                      (identifier))))))))))))
+
+========================================================================
+PIVOT, UNPIVOT, and MATCH_RECOGNIZE as operators
+========================================================================
+
+FROM t |> PIVOT (SUM(a) FOR k IN (1, 2)) |> UNPIVOT (v FOR k IN (a, b)) |> MATCH_RECOGNIZE (ORDER BY x MEASURES COUNT(*) AS n PATTERN (a) DEFINE a AS TRUE)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_pivot
+        (pivot_clause
+          (aliased_expr
+            (call_expr
+              (path
+                (name_ref
+                  (identifier)))
+              (arg_list
+                (arg
+                  (path_expr
+                    (path
+                      (name_ref
+                        (identifier))))))))
+          column: (path_expr
+            (path
+              (name_ref
+                (identifier))))
+          (pivot_values
+            (aliased_expr
+              (literal
+                (integer)))
+            (aliased_expr
+              (literal
+                (integer))))))
+      (pipe_unpivot
+        (unpivot_clause
+          (path_list
+            (path
+              (name_ref
+                (identifier))))
+          (path
+            (name_ref
+              (identifier)))
+          (unpivot_item
+            (path_list
+              (path
+                (name_ref
+                  (identifier)))))
+          (unpivot_item
+            (path_list
+              (path
+                (name_ref
+                  (identifier)))))))
+      (pipe_match_recognize
+        (match_recognize_clause
+          (order_by
+            (order_key
+              (path_expr
+                (path
+                  (name_ref
+                    (identifier))))))
+          (measures
+            (measure
+              (call_expr
+                (path
+                  (name_ref
+                    (identifier)))
+                (arg_list
+                  (star_arg)))
+              (name
+                (identifier))))
+          (row_pattern
+            (pattern_alternation
+              (pattern_sequence
+                (pattern_variable
+                  (name_ref
+                    (identifier))))))
+          (define
+            (pattern_definition
+              (name
+                (identifier))
+              (literal))))))))
+
+========================================================================
+An item after a trailing comma starts with (
+========================================================================
+
+FROM t |> SELECT a, (b)
+
+---
+
+(source_file
+  (script
+    (query
+      (from_clause
+        (table_source
+          (path
+            (name_ref
+              (identifier)))))
+      (pipe_select
+        (select_item
+          (path_expr
+            (path
+              (name_ref
+                (identifier)))))
+        (select_item
+          (paren_expr
+            (path_expr
+              (path
+                (name_ref
+                  (identifier))))))))))
