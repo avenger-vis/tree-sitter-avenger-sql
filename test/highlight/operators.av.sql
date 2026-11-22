@@ -1,0 +1,42 @@
+FROM t |> WHERE a + b - c * d / e || f >= 1 AND g <> 2 AND h != 3 AND i <= j
+--     ^ operator
+--                ^ operator
+--                    ^ operator
+--                        ^ operator
+--                            ^ operator
+--                                ^ operator
+--                                     ^ operator
+--                                                ^ operator
+--                                                           ^ operator
+--                                                                      ^ operator
+|> EXTEND -x AS neg, ~y AS inv, a & b | c ^ d AS bits, a << 1 >> 2 AS shift
+--        ^ operator
+--                   ^ operator
+--                                ^ operator
+-- <- operator
+--                                        ^ operator
+--                                                       ^ operator
+--                                                            ^ operator
+|> EXTEND arr[0] AS first, (a, b) AS pair, [1, 2] AS xs, STRUCT(1 AS one) AS s;
+--           ^ punctuation.bracket
+--             ^ punctuation.bracket
+--                         ^ punctuation.bracket
+--                       ^ punctuation.delimiter
+--                                                                            ^ punctuation.delimiter
+FROM t |> MATCH_RECOGNIZE (ORDER BY day MEASURES FIRST(a.x) AS start_ PATTERN (^ a+ b*? (c | d){1,3} $) DEFINE a AS x > 0, b AS x < 0)
+--        ^ keyword
+--                                               ^ function
+--                                                             ^ variable
+--                                                                             ^ operator
+--                                                                               ^ variable
+--                                                                                ^ operator
+--                                                                                  ^ variable
+--                                                                                   ^ operator
+--                                                                                    ^ operator
+--                                                                                       ^ variable
+--     ^ operator
+--                                                                                             ^ punctuation.bracket
+--                                                                                              ^ number
+--                                                                                                   ^ operator
+--                                                                                                             ^ variable
+--                                                                                                                         ^ variable

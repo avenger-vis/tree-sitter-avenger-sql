@@ -17,6 +17,12 @@ pub const LANGUAGE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_aveng
 /// The generated public node contract.
 pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 
+/// The highlighting query, whose capture names are Zed's.
+pub const HIGHLIGHTS_QUERY: &str = include_str!("../../queries/highlights.scm");
+
+/// The injections query: JSON in a `JSON` literal.
+pub const INJECTIONS_QUERY: &str = include_str!("../../queries/injections.scm");
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -25,5 +31,13 @@ mod tests {
         parser
             .set_language(&super::LANGUAGE.into())
             .expect("the avenger-sql language loads");
+    }
+
+    #[test]
+    fn queries_compile() {
+        let language = super::LANGUAGE.into();
+        for query in [super::HIGHLIGHTS_QUERY, super::INJECTIONS_QUERY] {
+            tree_sitter::Query::new(&language, query).expect("the query compiles");
+        }
     }
 }

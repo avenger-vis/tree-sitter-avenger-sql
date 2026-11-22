@@ -9,3 +9,4 @@ git diff --exit-code -- \
   src/tree_sitter/alloc.h \
   src/tree_sitter/array.h \
   src/tree_sitter/parser.h
+node scripts/sync_queries.mjs --check

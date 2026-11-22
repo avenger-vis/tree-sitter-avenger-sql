@@ -4,3 +4,4 @@ target/
 *.o
 *.obj
 *.wasm
+tests/output/
