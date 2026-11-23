@@ -47,6 +47,31 @@
           (string_content) @string.special))) @_entry)
   (#match? @_entry "^[fF][oO][rR][mM][aA][tT][ \t\r\n]*="))
 
+; The value of a typed literal: a date, a time, or a range, as `2024-01-01` in
+; `DATE '2024-01-01'`, a constant of its own, and a number of `NUMERIC` and its kin. The capture
+; is on the content, inside the string's own capture, so the quotes stay strings. The language
+; server's semantic tokens draw the parts of a date or a time over it, as its digits.
+(typed_literal
+  [
+    "DATE"
+    "TIME"
+    "DATETIME"
+    "TIMESTAMP"
+    "RANGE"
+  ]
+  (string
+    (string_content) @string.special))
+
+(typed_literal
+  [
+    "NUMERIC"
+    "DECIMAL"
+    "BIGNUMERIC"
+    "BIGDECIMAL"
+  ]
+  (string
+    (string_content) @number))
+
 ; A number of a literal. The digits of a dashed table name, as in `my-project-2`, are part of
 ; the name.
 (literal

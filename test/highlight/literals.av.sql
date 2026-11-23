@@ -15,8 +15,17 @@ FROM penguins  # one line
 --              ^ string
 --                          ^ keyword
 --                               ^ string
+--                                ^ string.special
 --                                                  ^ keyword
 --                                                       ^ string
+|> EXTEND TIME '12:30:00' AS t1, DATETIME '2024-01-01 12:30:00.5' AS t2, TIMESTAMP '2024-01-01T12:30:00+05:30' AS t3
+--              ^ string.special
+--                                         ^ string.special
+--                                                                                  ^ string.special
+|> EXTEND RANGE<DATE> '[2024-01-01, 2025-01-01)' AS r, NUMERIC '1.25' AS n1, BIGNUMERIC '-3e40' AS n2
+--                     ^ string.special
+--                                                              ^ number
+--                                                                                       ^ number
 |> EXTEND 10 AS i, 0x1F AS j, 1.5e3 AS k, .5 AS l, TRUE AS m, FALSE AS n, NULL AS o
 --        ^ number
 --                 ^ number
