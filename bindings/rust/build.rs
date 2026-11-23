@@ -20,16 +20,16 @@ fn main() {
 
     build.compile("tree-sitter-avenger-sql");
 
-    let format_directory = std::path::Path::new("format/src");
-    let format_parser = format_directory.join("parser.c");
-    println!("cargo:rerun-if-changed={}", format_parser.display());
-    let mut format = cc::Build::new();
-    format
-        .std("c11")
-        .include(format_directory)
-        .file(format_parser);
-    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
-        format.flag("-utf-8");
+    // The grammars that avenger-sql's grammar injects, each in its own directory.
+    for name in ["format", "datetime"] {
+        let directory = std::path::Path::new(name).join("src");
+        let parser = directory.join("parser.c");
+        println!("cargo:rerun-if-changed={}", parser.display());
+        let mut build = cc::Build::new();
+        build.std("c11").include(&directory).file(parser);
+        if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+            build.flag("-utf-8");
+        }
+        build.compile(&format!("tree-sitter-avenger-{name}"));
     }
-    format.compile("tree-sitter-avenger-format");
 }

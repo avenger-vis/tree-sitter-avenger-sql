@@ -26,6 +26,7 @@ FROM penguins  # one line
 --                     ^ string.special
 --                                                              ^ number
 --                                                                                       ^ number
+|> EXTEND TIMESTAMP '2024-01-01 12:30:00 America/Los_Angeles' AS t4, TIMESTAMP '2024-01-01T12:30:00Z' AS t5, RANGE<DATE> '[UNBOUNDED, NULL)' AS r2
 |> EXTEND 10 AS i, 0x1F AS j, 1.5e3 AS k, .5 AS l, TRUE AS m, FALSE AS n, NULL AS o
 --        ^ number
 --                 ^ number

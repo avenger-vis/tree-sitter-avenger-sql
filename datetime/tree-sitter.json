@@ -1,0 +1,33 @@
+{
+  "grammars": [
+    {
+      "name": "avenger_datetime",
+      "camelcase": "AvengerDatetime",
+      "scope": "source.avenger-datetime",
+      "path": ".",
+      "file-types": [
+        "avenger-datetime"
+      ],
+      "highlights": "queries/highlights.scm",
+      "injection-regex": "^avenger-datetime$",
+      "injections": []
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "The Tree-sitter grammar of the values of GoogleSQL's date, time, and range literals, which avenger-sql's grammar injects",
+    "authors": [
+      {
+        "name": "Jon Mease"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/avenger-vis/tree-sitter-avenger-sql"
+    }
+  },
+  "bindings": {
+    "c": false,
+    "rust": false
+  }
+}

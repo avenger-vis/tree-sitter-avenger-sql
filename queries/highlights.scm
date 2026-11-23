@@ -49,8 +49,9 @@
 
 ; The value of a typed literal: a date, a time, or a range, as `2024-01-01` in
 ; `DATE '2024-01-01'`, a constant of its own, and a number of `NUMERIC` and its kin. The capture
-; is on the content, inside the string's own capture, so the quotes stay strings. The language
-; server's semantic tokens draw the parts of a date or a time over it, as its digits.
+; is on the content, inside the string's own capture, so the quotes stay strings. The injection
+; of `avenger-datetime` draws the parts of a date or a time over it, as its digits, where a host
+; draws injections.
 (typed_literal
   [
     "DATE"

@@ -1,12 +1,27 @@
-; Languages inside avenger-sql's strings: JSON in a `JSON` literal, the regular expression of a
-; regex function, and the format string of a function that formats or parses. The escape
-; sequences of a string stay out of the injected text.
+; Languages inside avenger-sql's strings: JSON in a `JSON` literal, the value of a date, a time,
+; or a range literal, the regular expression of a regex function, and the format string of a
+; function that formats or parses. The escape sequences of a string stay out of the injected
+; text.
 
 (typed_literal
   "JSON"
   (string
     (string_content) @injection.content)
   (#set! injection.language "json"))
+
+; The value of a date, a time, or a range literal, as `2024-01-01` in `DATE '2024-01-01'`, which
+; highlights.scm colors as a whole first.
+(typed_literal
+  [
+    "DATE"
+    "TIME"
+    "DATETIME"
+    "TIMESTAMP"
+    "RANGE"
+  ]
+  (string
+    (string_content) @injection.content)
+  (#set! injection.language "avenger-datetime"))
 
 ; The regular expression of GoogleSQL's regex functions, their second argument, in RE2's syntax:
 ; `REGEXP_CONTAINS`, `REGEXP_EXTRACT`, `REGEXP_EXTRACT_ALL`, `REGEXP_EXTRACT_GROUPS`,
