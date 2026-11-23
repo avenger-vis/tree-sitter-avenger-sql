@@ -1,8 +1,8 @@
 //! The queries over the highlight fixtures of `test/highlight/`: the captures of each fixture
 //! match its baseline in `tests/baselines/`, no node or range has two highlight captures, every
 //! pattern of `highlights.scm` captures in some fixture, and every capture name is one that Zed
-//! and q2 show. The format strings that the fixtures inject parse in the format grammar, and
-//! every pattern of its `highlights.scm` captures in them.
+//! and q2 show. The strings that the fixtures inject into the format and datetime grammars parse
+//! in them without errors, and every pattern of each one's `highlights.scm` captures in them.
 //!
 //! A test writes the captures of each fixture to `tests/output/`, and a change of them is
 //! accepted by copying the output over the baseline.
@@ -15,7 +15,8 @@ use std::{
 
 use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator};
 use tree_sitter_avenger_sql::{
-    FORMAT_HIGHLIGHTS_QUERY, FORMAT_LANGUAGE, HIGHLIGHTS_QUERY, INJECTIONS_QUERY, LANGUAGE,
+    DATETIME_HIGHLIGHTS_QUERY, DATETIME_LANGUAGE, FORMAT_HIGHLIGHTS_QUERY, FORMAT_LANGUAGE,
+    HIGHLIGHTS_QUERY, INJECTIONS_QUERY, LANGUAGE,
 };
 
 /// The capture names that Zed documents (`docs/src/extensions/languages.md`) or that its bundled
@@ -335,9 +336,11 @@ fn every_highlight_pattern_captures_in_a_fixture() {
 fn every_capture_is_a_name_that_zed_and_q2_show() {
     let query = Query::new(&language(), HIGHLIGHTS_QUERY).unwrap();
     let format = Query::new(&FORMAT_LANGUAGE.into(), FORMAT_HIGHLIGHTS_QUERY).unwrap();
+    let datetime = Query::new(&DATETIME_LANGUAGE.into(), DATETIME_HIGHLIGHTS_QUERY).unwrap();
     let mut wrong = Vec::new();
     for name in (query.capture_names().iter())
         .chain(format.capture_names())
+        .chain(datetime.capture_names())
         .filter(|name| !name.starts_with('_'))
     {
         let zed = ZED.contains(name) || ZED_FALLBACKS.iter().any(|(refined, _)| refined == name);
@@ -362,56 +365,88 @@ fn every_capture_is_a_name_that_zed_and_q2_show() {
     assert!(wrong.is_empty(), "\n{}", wrong.join("\n"));
 }
 
-#[test]
-fn the_injected_formats_parse_and_take_every_format_pattern() {
+/// The grammars that the injections query injects, which this crate holds: each one's name in
+/// the query, its language, and its highlights query.
+fn injected() -> [(&'static str, Language, &'static str); 2] {
+    [
+        (
+            "avenger-format",
+            FORMAT_LANGUAGE.into(),
+            FORMAT_HIGHLIGHTS_QUERY,
+        ),
+        (
+            "avenger-datetime",
+            DATETIME_LANGUAGE.into(),
+            DATETIME_HIGHLIGHTS_QUERY,
+        ),
+    ]
+}
+
+/// The texts that the injections query gives `name` in the fixtures.
+fn injected_texts(name: &str) -> Vec<String> {
     let language = language();
     let injections = Query::new(&language, INJECTIONS_QUERY).unwrap();
-    let format_language: Language = FORMAT_LANGUAGE.into();
-    let format_query = Query::new(&format_language, FORMAT_HIGHLIGHTS_QUERY).unwrap();
     let mut parser = Parser::new();
     parser.set_language(&language).unwrap();
-    let mut format_parser = Parser::new();
-    format_parser.set_language(&format_language).unwrap();
-    let mut formats = Vec::new();
+    let mut texts = Vec::new();
     for (_, text) in fixtures() {
         let tree = parser.parse(&text, None).unwrap();
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(&injections, tree.root_node(), text.as_bytes());
         while let Some(m) = matches.next() {
-            let language = injections
+            let injected = injections
                 .property_settings(m.pattern_index)
                 .iter()
                 .find(|setting| &*setting.key == "injection.language")
                 .and_then(|setting| setting.value.as_deref());
-            if language != Some("avenger-format") {
+            if injected != Some(name) {
                 continue;
             }
             for capture in m.captures() {
                 if injections.capture_names()[capture.index as usize] == "injection.content" {
-                    formats.push(text[capture.node.byte_range()].to_string());
+                    texts.push(text[capture.node.byte_range()].to_string());
                 }
             }
         }
     }
-    assert!(!formats.is_empty(), "the fixtures inject formats");
-    let mut used = BTreeSet::new();
-    for format in &formats {
-        let tree = format_parser.parse(format, None).unwrap();
+    texts
+}
+
+#[test]
+fn the_injected_strings_parse_and_take_every_pattern() {
+    for (name, language, highlights) in injected() {
+        let query = Query::new(&language, highlights).unwrap();
+        let mut parser = Parser::new();
+        parser.set_language(&language).unwrap();
+        let texts = injected_texts(name);
+        assert!(!texts.is_empty(), "the fixtures inject {name}");
+        let mut used = BTreeSet::new();
+        for text in &texts {
+            let tree = parser.parse(text, None).unwrap();
+            assert!(
+                !tree.root_node().has_error(),
+                "{text:?} parses as {name} without errors"
+            );
+            used.extend(
+                captures(&query, &tree, text)
+                    .iter()
+                    .map(|capture| capture.pattern),
+            );
+        }
+        let unused: Vec<String> = (0..query.pattern_count())
+            .filter(|pattern| !used.contains(pattern))
+            .map(|pattern| {
+                let start = query.start_byte_for_pattern(pattern);
+                highlights[start..]
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect();
         assert!(
-            !tree.root_node().has_error(),
-            "{format:?} parses without errors"
-        );
-        used.extend(
-            captures(&format_query, &tree, format)
-                .iter()
-                .map(|capture| capture.pattern),
+            unused.is_empty(),
+            "patterns of {name} without a capture: {unused:?}"
         );
     }
-    let unused: Vec<usize> = (0..format_query.pattern_count())
-        .filter(|pattern| !used.contains(pattern))
-        .collect();
-    assert!(
-        unused.is_empty(),
-        "patterns of the format grammar without a capture: {unused:?}"
-    );
 }

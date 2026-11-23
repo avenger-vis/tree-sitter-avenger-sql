@@ -17,4 +17,12 @@ git diff --exit-code -- \
   format/src/tree_sitter/alloc.h \
   format/src/tree_sitter/array.h \
   format/src/tree_sitter/parser.h
+(cd datetime && tree-sitter generate)
+git diff --exit-code -- \
+  datetime/src/grammar.json \
+  datetime/src/node-types.json \
+  datetime/src/parser.c \
+  datetime/src/tree_sitter/alloc.h \
+  datetime/src/tree_sitter/array.h \
+  datetime/src/tree_sitter/parser.h
 node scripts/sync_queries.mjs --check

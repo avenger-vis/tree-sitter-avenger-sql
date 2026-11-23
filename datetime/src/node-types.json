@@ -1,0 +1,322 @@
+[
+  {
+    "type": "date",
+    "named": true,
+    "fields": {
+      "day": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "day",
+            "named": true
+          }
+        ]
+      },
+      "month": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "month",
+            "named": true
+          }
+        ]
+      },
+      "year": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "year",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "datetime",
+    "named": true,
+    "fields": {
+      "separator": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": " ",
+            "named": false
+          },
+          {
+            "type": "T",
+            "named": false
+          },
+          {
+            "type": "t",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "date",
+          "named": true
+        },
+        {
+          "type": "offset",
+          "named": true
+        },
+        {
+          "type": "time",
+          "named": true
+        },
+        {
+          "type": "utc",
+          "named": true
+        },
+        {
+          "type": "zone_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "offset",
+    "named": true,
+    "fields": {
+      "hours": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "hours",
+            "named": true
+          }
+        ]
+      },
+      "minutes": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "minutes",
+            "named": true
+          }
+        ]
+      },
+      "sign": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "+",
+            "named": false
+          },
+          {
+            "type": "-",
+            "named": false
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "range",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "datetime",
+          "named": true
+        },
+        {
+          "type": "null",
+          "named": true
+        },
+        {
+          "type": "unbounded",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "time",
+    "named": true,
+    "fields": {
+      "fraction": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "fraction",
+            "named": true
+          }
+        ]
+      },
+      "hour": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "hour",
+            "named": true
+          }
+        ]
+      },
+      "minute": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "minute",
+            "named": true
+          }
+        ]
+      },
+      "second": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "second",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "utc",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "value",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "datetime",
+          "named": true
+        },
+        {
+          "type": "range",
+          "named": true
+        },
+        {
+          "type": "time",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": " ",
+    "named": false
+  },
+  {
+    "type": ")",
+    "named": false
+  },
+  {
+    "type": "+",
+    "named": false
+  },
+  {
+    "type": ",",
+    "named": false
+  },
+  {
+    "type": "-",
+    "named": false
+  },
+  {
+    "type": ".",
+    "named": false
+  },
+  {
+    "type": ":",
+    "named": false
+  },
+  {
+    "type": "T",
+    "named": false
+  },
+  {
+    "type": "Z",
+    "named": false
+  },
+  {
+    "type": "[",
+    "named": false
+  },
+  {
+    "type": "day",
+    "named": true
+  },
+  {
+    "type": "fraction",
+    "named": true
+  },
+  {
+    "type": "hour",
+    "named": true
+  },
+  {
+    "type": "hours",
+    "named": true
+  },
+  {
+    "type": "minute",
+    "named": true
+  },
+  {
+    "type": "minutes",
+    "named": true
+  },
+  {
+    "type": "month",
+    "named": true
+  },
+  {
+    "type": "null",
+    "named": true
+  },
+  {
+    "type": "second",
+    "named": true
+  },
+  {
+    "type": "t",
+    "named": false
+  },
+  {
+    "type": "unbounded",
+    "named": true
+  },
+  {
+    "type": "year",
+    "named": true
+  },
+  {
+    "type": "z",
+    "named": false
+  },
+  {
+    "type": "zone_name",
+    "named": true
+  }
+]

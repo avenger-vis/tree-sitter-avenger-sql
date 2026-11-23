@@ -6,3 +6,6 @@ src/tree_sitter/* linguist-generated
 format/src/*.json linguist-generated
 format/src/parser.c linguist-generated
 format/src/tree_sitter/* linguist-generated
+datetime/src/*.json linguist-generated
+datetime/src/parser.c linguist-generated
+datetime/src/tree_sitter/* linguist-generated

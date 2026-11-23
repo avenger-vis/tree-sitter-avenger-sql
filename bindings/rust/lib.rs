@@ -5,14 +5,16 @@
 //! The parser is a tolerant editor parser. avenger-sql-syntax and the analysis remain the
 //! authority on whether a script is valid.
 //!
-//! A second grammar, `avenger_format`, reads GoogleSQL's format strings, which the injections
-//! query injects into the format of `FORMAT_DATE` and its kin.
+//! Two more grammars read the languages that the injections query injects into strings:
+//! `avenger_format`, GoogleSQL's format strings, in the format of `FORMAT_DATE` and its kin, and
+//! `avenger_datetime`, the values of GoogleSQL's date, time, and range literals.
 
 use tree_sitter_language::LanguageFn;
 
 unsafe extern "C" {
     fn tree_sitter_avenger_sql() -> *const ();
     fn tree_sitter_avenger_format() -> *const ();
+    fn tree_sitter_avenger_datetime() -> *const ();
 }
 
 /// The Tree-sitter language function for this grammar.
@@ -24,9 +26,9 @@ pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 /// The highlighting query, whose capture names are Zed's.
 pub const HIGHLIGHTS_QUERY: &str = include_str!("../../queries/highlights.scm");
 
-/// The injections query: JSON in a `JSON` literal, regular expressions in the patterns of the
-/// regex functions, and format strings in the formats of the functions that format and parse
-/// dates and times.
+/// The injections query: JSON in a `JSON` literal, dates and times in the values of date, time,
+/// and range literals, regular expressions in the patterns of the regex functions, and format
+/// strings in the formats of the functions that format and parse dates and times.
 pub const INJECTIONS_QUERY: &str = include_str!("../../queries/injections.scm");
 
 /// The Tree-sitter language function of GoogleSQL's format strings, which `INJECTIONS_QUERY`
@@ -38,6 +40,17 @@ pub const FORMAT_NODE_TYPES: &str = include_str!("../../format/src/node-types.js
 
 /// The highlighting query of the format grammar, whose capture names are Zed's.
 pub const FORMAT_HIGHLIGHTS_QUERY: &str = include_str!("../../format/queries/highlights.scm");
+
+/// The Tree-sitter language function of the values of GoogleSQL's date, time, and range literals,
+/// which `INJECTIONS_QUERY` injects as `avenger-datetime`.
+pub const DATETIME_LANGUAGE: LanguageFn =
+    unsafe { LanguageFn::from_raw(tree_sitter_avenger_datetime) };
+
+/// The generated public node contract of the datetime grammar.
+pub const DATETIME_NODE_TYPES: &str = include_str!("../../datetime/src/node-types.json");
+
+/// The highlighting query of the datetime grammar, whose capture names are Zed's.
+pub const DATETIME_HIGHLIGHTS_QUERY: &str = include_str!("../../datetime/queries/highlights.scm");
 
 #[cfg(test)]
 mod tests {
@@ -58,5 +71,8 @@ mod tests {
         let format = super::FORMAT_LANGUAGE.into();
         tree_sitter::Query::new(&format, super::FORMAT_HIGHLIGHTS_QUERY)
             .expect("the format query compiles");
+        let datetime = super::DATETIME_LANGUAGE.into();
+        tree_sitter::Query::new(&datetime, super::DATETIME_HIGHLIGHTS_QUERY)
+            .expect("the datetime query compiles");
     }
 }
