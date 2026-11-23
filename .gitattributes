@@ -3,3 +3,6 @@
 src/*.json linguist-generated
 src/parser.c linguist-generated
 src/tree_sitter/* linguist-generated
+format/src/*.json linguist-generated
+format/src/parser.c linguist-generated
+format/src/tree_sitter/* linguist-generated

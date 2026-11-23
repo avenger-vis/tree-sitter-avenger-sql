@@ -1,5 +1,6 @@
-; Languages inside avenger-sql's strings: JSON in a `JSON` literal, and the regular expression of
-; a regex function. The escape sequences of a string stay out of the injected text.
+; Languages inside avenger-sql's strings: JSON in a `JSON` literal, the regular expression of a
+; regex function, and the format string of a function that formats or parses. The escape
+; sequences of a string stay out of the injected text.
 
 (typed_literal
   "JSON"
@@ -26,3 +27,19 @@
   (#match? @_function "^(?i)regexp_(contains|extract|extract_all|extract_groups|instr|match|replace|substr)$")
   (#match? @_string "^([rR]|[^\\\\]*$)")
   (#set! injection.language "regex"))
+
+; The format of the functions that format and parse dates and times, their first argument, and
+; of `FORMAT`: a format string, whose elements, such as `%Y`, and specifiers, such as `%'.2f`, are
+; GoogleSQL's. The query names every such function of GoogleSQL, also those that avenger-sql's
+; library doesn't have yet.
+(call_expr
+  (path
+    (name_ref) @_function)
+  (arg_list
+    .
+    (arg
+      (literal
+        (string
+          (string_content) @injection.content))))
+  (#match? @_function "^(?i)(format|(format|parse)_(date|time|datetime|timestamp))$")
+  (#set! injection.language "avenger-format"))
