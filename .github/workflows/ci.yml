@@ -44,6 +44,25 @@ jobs:
       - working-directory: tree-sitter-avenger-sql
         run: node scripts/sync_keywords.mjs --avenger-root ../avenger --check
 
+  string-arguments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tree-sitter-avenger-sql
+      - uses: actions/checkout@v4
+        with:
+          repository: jonmmease/avenger
+          ref: 747e9660af1a1179e4960b3f10627d4cacaabe14
+          path: avenger
+          sparse-checkout: avenger-sql/string-arguments.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - working-directory: tree-sitter-avenger-sql
+        run: node scripts/sync_injections.mjs --avenger-root ../avenger --check
+
   rust:
     strategy:
       fail-fast: false

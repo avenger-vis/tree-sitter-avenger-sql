@@ -28,6 +28,14 @@ The external scanner (`src/scanner.c`) reads strings and bytes literals: single,
 
 `queries/injections.scm` injects JSON into the string of a `JSON` literal, `avenger-datetime` into the value of a `DATE`, `TIME`, `DATETIME`, `TIMESTAMP`, or `RANGE<T>` literal, and a regular expression into the pattern of GoogleSQL's eight regex functions, such as `REGEXP_CONTAINS`, when the pattern is a raw string or a string without escape sequences, whose text is the regular expression. The query names all eight, also those that avenger-sql's library doesn't have yet. It also injects `avenger-format` into the format of the functions that format and parse dates and times, such as `FORMAT_DATE`, and of `FORMAT`: their first argument.
 
+The query also injects `avenger-typst`, the grammar of [tree-sitter-avenger-typst](https://github.com/avenger-vis/tree-sitter-avenger-typst), into the Typst markup of charts, and `avenger-format` into their format patterns, as in `title => '*Penguins*'` and `labels(format => '%Y')`. These patterns are generated from avenger-sql's `string-arguments.json`, which lists each argument of a chart function or constructor whose strings are markup or a format pattern, by the names that a script writes. A constructor whose name has several meanings, as the plot's `title`, whose first argument is markup, and the tooltip's, whose first argument is a column, matches only as the value of the arguments that take it, and a title whose `syntax` is one that the file lists as plain, `'plain'` or `'plain_lines'`, in any quotes, is no markup. A string of markup that isn't raw and holds an escaped backslash, `\\`, takes no injection: the injected text leaves out a string's escape sequences, so Typst would read the character after the backslash as syntax, as `*` in `'\\*a\\*'`. An injection sees only syntax, so a title whose syntax is a variable keeps its markup, and a `syntax => 'plain'` in a comment of the argument list leaves the title plain. When the file changes in avenger, the patterns follow it:
+
+```sh
+node scripts/sync_injections.mjs --avenger-root PATH
+```
+
+CI checks them with `--check` against a pinned revision of avenger, as it checks the keywords. `tests/injections.rs` checks the languages that the strings of a list of charts take, and that every generated pattern matches in one of them.
+
 Two parts of `highlights.scm` are generated from `src/node-types.json`: the keywords, and the pattern of a column for each type of node that holds an expression. A grammar change that adds a keyword or a place of an expression updates them:
 
 ```sh
