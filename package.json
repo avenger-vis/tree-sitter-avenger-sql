@@ -9,7 +9,7 @@
   },
   "scripts": {
     "generate": "tree-sitter generate",
-    "test": "tree-sitter test",
+    "test": "tree-sitter test && cd format && tree-sitter test",
     "test:wasm": "tree-sitter test --wasm",
     "test:fuzz": "tree-sitter fuzz --iterations 100 --edits 8",
     "check-generated": "sh scripts/check_generated.sh",
@@ -34,6 +34,10 @@
   "files": [
     "bindings/c/**",
     "bindings/rust/**",
+    "format/grammar.js",
+    "format/tree-sitter.json",
+    "format/queries/**",
+    "format/src/**",
     "grammar.js",
     "grammar/**",
     "LICENSE",

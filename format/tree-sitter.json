@@ -1,0 +1,33 @@
+{
+  "grammars": [
+    {
+      "name": "avenger_format",
+      "camelcase": "AvengerFormat",
+      "scope": "source.avenger-format",
+      "path": ".",
+      "file-types": [
+        "avenger-format"
+      ],
+      "highlights": "queries/highlights.scm",
+      "injection-regex": "^avenger-format$",
+      "injections": []
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "The Tree-sitter grammar of GoogleSQL's format strings, which avenger-sql's grammar injects",
+    "authors": [
+      {
+        "name": "Jon Mease"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/avenger-vis/tree-sitter-avenger-sql"
+    }
+  },
+  "bindings": {
+    "c": false,
+    "rust": false
+  }
+}
