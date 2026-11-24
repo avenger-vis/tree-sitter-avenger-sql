@@ -1,0 +1,174 @@
+================================================================================
+1 - note how links are spans with targets
+================================================================================
+[a link](./a-page.qmd)
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_span
+            (content
+              (pandoc_str)
+              (pandoc_space)
+              (pandoc_str))
+            (target
+              (url))))))
+================================================================================
+2 - targets can have titles
+================================================================================
+[a link](./a-page.qmd "a title")
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_span
+            (content
+              (pandoc_str)
+              (pandoc_space)
+              (pandoc_str))
+            (target
+              (url)
+              (title))))))
+================================================================================
+3 - spans nest (even though links technically don't, shrug)
+================================================================================
+[a [nested span]{.class}](./link){#id}
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_span
+            (content
+              (pandoc_str)
+              (pandoc_space)
+              (pandoc_span
+                (content
+                  (pandoc_str)
+                  (pandoc_space)
+                  (pandoc_str))
+                (attribute_specifier
+                  (commonmark_specifier
+                    (attribute_class)))))
+            (target
+              (url))
+            (attribute_specifier
+              (commonmark_specifier
+                (attribute_id)))))))
+================================================================================
+autolinks (anything starting with < but not <!, ending with >)
+================================================================================
+This is an <http://autolink.com>.
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_str)
+          (pandoc_space)
+          (pandoc_str)
+          (pandoc_space)
+          (pandoc_str)
+          (autolink)
+          (pandoc_str))))
+================================================================================
+email autolinks (bd-email-autolink-dropped-2jj38iiv)
+================================================================================
+Contact <sales@example.com> now.
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_str)
+          (autolink)
+          (pandoc_space)
+          (pandoc_str))))
+================================================================================
+email autolink with single-label domain
+================================================================================
+<a@b>
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (autolink))))
+================================================================================
+invalid email-shaped content also lexes as autolink (over-approximation; pampa classifies precisely)
+================================================================================
+<foo@@bar>
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (autolink))))
+================================================================================
+angle-bracket destination with spaces (bd-angle-link-dest-qkqkegqo)
+================================================================================
+![](<a path with spaces.png>)
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_image
+            (target
+              angle_bracket_url: (url))))))
+================================================================================
+angle-bracket destination with title
+================================================================================
+[link](<foo bar.html> "a title")
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_span
+            (content
+              (pandoc_str))
+            (target
+              angle_bracket_url: (url)
+              (title))))))
+================================================================================
+angle-bracket destination with attributes, empty, and escaped bracket
+================================================================================
+[x](<a b>){.c} [y](<>) [z](<a\>b>)
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_span
+            (content
+              (pandoc_str))
+            (target
+              angle_bracket_url: (url))
+            (attribute_specifier
+              (commonmark_specifier
+                (attribute_class))))
+          (pandoc_space)
+          (pandoc_span
+            (content
+              (pandoc_str))
+            (target
+              angle_bracket_url: (url)))
+          (pandoc_space)
+          (pandoc_span
+            (content
+              (pandoc_str))
+            (target
+              angle_bracket_url: (url))))))
+================================================================================
+unclosed '<' falls back to a bare destination
+================================================================================
+[x](<foo)
+--------------------------------------------------------------------------------
+    (document
+      (section
+        (pandoc_paragraph
+          (pandoc_span
+            (content
+              (pandoc_str))
+            (target
+              (url))))))
+================================================================================
+angle-bracket destination cannot span lines (CommonMark)
+:error
+================================================================================
+[x](<a
+b>)
+--------------------------------------------------------------------------------

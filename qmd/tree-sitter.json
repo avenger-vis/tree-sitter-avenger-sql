@@ -1,0 +1,38 @@
+{
+  "grammars": [
+    {
+      "name": "avenger_qmd",
+      "camelcase": "AvengerQmd",
+      "scope": "text.avenger-qmd",
+      "path": ".",
+      "file-types": [
+        "qmd"
+      ],
+      "injection-regex": "^avenger-qmd$",
+      "injections": [],
+      "external-files": [
+        "common/common.js"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Quarto 2's Tree-sitter grammar of Quarto Markdown, from quarto-dev/q2, under the name avenger_qmd",
+    "authors": [
+      {
+        "name": "Posit, PBC"
+      },
+      {
+        "name": "Matthias Deiml"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/avenger-vis/tree-sitter-avenger-sql"
+    }
+  },
+  "bindings": {
+    "c": false,
+    "rust": false
+  }
+}

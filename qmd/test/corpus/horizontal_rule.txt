@@ -1,0 +1,26 @@
+================================================================================
+1
+================================================================================
+---
+title: hello
+---
+
+A para.
+
+---
+
+Another para.
+--------------------------------------------------------------------------------
+    (document
+      (metadata
+        body: (yaml))
+      (section
+        (pandoc_paragraph
+          (pandoc_str)
+          (pandoc_space)
+          (pandoc_str))
+        (pandoc_horizontal_rule)
+        (pandoc_paragraph
+          (pandoc_str)
+          (pandoc_space)
+          (pandoc_str))))

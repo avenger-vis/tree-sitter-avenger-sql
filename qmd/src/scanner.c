@@ -1,0 +1,4102 @@
+#include "tree_sitter/parser.h"
+#include <assert.h>
+#include <ctype.h>
+#include <string.h>
+#include <wctype.h>
+
+// set this define to turn on debugging printouts
+// #define SCAN_DEBUG 1
+
+#ifdef SCAN_DEBUG
+#include <stdio.h>
+#define DEBUG_HERE printf("(%d) <trace>\n", __LINE__);
+#define DEBUG_PRINT(...) do {  \
+    printf("(%d) ", __LINE__); \
+    printf(__VA_ARGS__);       \
+} while (0)
+#else
+#define DEBUG_HERE
+#define DEBUG_PRINT(...)
+#endif
+
+#define DEBUG_EXP(FMT, EXPRESSION) DEBUG_PRINT(#EXPRESSION ": " FMT "\n", EXPRESSION)
+#define DEBUG_LOOKAHEAD DEBUG_PRINT("   lookahead: (%d) (%c)\n", (int)lexer->lookahead, lexer->lookahead >= 32 ? lexer->lookahead : ' ')
+
+// For explanation of the tokens see grammar.js
+typedef enum {
+    LINE_ENDING,
+    SOFT_LINE_ENDING,
+    BLOCK_CLOSE,
+    BLOCK_CONTINUATION,
+    BLOCK_QUOTE_START,
+    ATX_H1_MARKER,
+    ATX_H2_MARKER,
+    ATX_H3_MARKER,
+    ATX_H4_MARKER,
+    ATX_H5_MARKER,
+    ATX_H6_MARKER,
+    THEMATIC_BREAK,
+    LIST_MARKER_MINUS,
+    LIST_MARKER_PLUS,
+    LIST_MARKER_STAR,
+    LIST_MARKER_PARENTHESIS,
+    LIST_MARKER_DOT,
+    LIST_MARKER_MINUS_DONT_INTERRUPT,
+    LIST_MARKER_PLUS_DONT_INTERRUPT,
+    LIST_MARKER_STAR_DONT_INTERRUPT,
+    LIST_MARKER_PARENTHESIS_DONT_INTERRUPT,
+    LIST_MARKER_DOT_DONT_INTERRUPT,
+    LIST_MARKER_EXAMPLE,
+    LIST_MARKER_EXAMPLE_DONT_INTERRUPT,
+    FENCED_CODE_BLOCK_START_BACKTICK,
+    BLANK_LINE_START,
+    FENCED_CODE_BLOCK_END_BACKTICK,
+    CLOSE_BLOCK,
+    ERROR,
+    TRIGGER_ERROR,
+    TOKEN_EOF,
+    MINUS_METADATA_START,
+    MINUS_METADATA_OPEN_NEWLINE,
+    MINUS_METADATA_BODY,
+    MINUS_METADATA_END,
+    PIPE_TABLE_START,
+    PIPE_TABLE_LINE_ENDING,
+    FENCED_DIV_START,
+    FENCED_DIV_END,
+    REF_ID_SPECIFIER,
+    FENCED_DIV_NOTE_ID,
+    // block-level editorial marks: `::: ++`, `::: --`, `::: >>`, `::: !!`
+    FENCED_DIV_INSERT_MARKER,
+    FENCED_DIV_DELETE_MARKER,
+    FENCED_DIV_EDIT_COMMENT_MARKER,
+    FENCED_DIV_HIGHLIGHT_MARKER,
+
+    // code span delimiters for parsing pipe table cells
+    CODE_SPAN_START,
+    CODE_SPAN_CLOSE,
+    // bd-nycn85a8: a backtick run inside an open code span whose length
+    // differs from the delimiter, emitted whole so the internal lexer never
+    // splits it (CommonMark: the closer is a run of exactly the opener's
+    // length; any other run is content).
+    CODE_SPAN_BACKTICK_RUN,
+    // latex span delimiters for parsing pipe table cells
+    LATEX_SPAN_START,
+    LATEX_SPAN_CLOSE,
+    // HTML comment token
+    HTML_COMMENT,
+    RAW_SPECIFIER,
+    AUTOLINK,
+    LANGUAGE_SPECIFIER,
+    KEY_SPECIFIER,
+    NAKED_VALUE_SPECIFIER,
+
+    // now all the tokens from the inline scanner since we're doing it all here
+    // SPAN_START
+
+    HIGHLIGHT_SPAN_START,
+    INSERT_SPAN_START,
+    DELETE_SPAN_START,
+    COMMENT_SPAN_START,
+
+    SINGLE_QUOTE_OPEN,
+    SINGLE_QUOTE_CLOSE,
+    DOUBLE_QUOTE_OPEN,
+    DOUBLE_QUOTE_CLOSE,
+
+    SHORTCODE_OPEN_ESCAPED,
+    SHORTCODE_CLOSE_ESCAPED,
+    SHORTCODE_OPEN,
+    SHORTCODE_CLOSE,
+
+    CITE_AUTHOR_IN_TEXT_WITH_OPEN_BRACKET,
+    CITE_SUPPRESS_AUTHOR_WITH_OPEN_BRACKET,
+    CITE_AUTHOR_IN_TEXT,
+    CITE_SUPPRESS_AUTHOR,
+
+    STRIKEOUT_OPEN,
+    STRIKEOUT_CLOSE,
+    SUBSCRIPT_OPEN,
+    SUBSCRIPT_CLOSE,
+    SUPERSCRIPT_OPEN,
+    SUPERSCRIPT_CLOSE,
+    INLINE_NOTE_START_TOKEN,
+
+    STRONG_EMPHASIS_OPEN_STAR,
+    STRONG_EMPHASIS_CLOSE_STAR,
+    STRONG_EMPHASIS_OPEN_UNDERSCORE,
+    STRONG_EMPHASIS_CLOSE_UNDERSCORE,
+    EMPHASIS_OPEN_STAR,
+    EMPHASIS_CLOSE_STAR,
+    EMPHASIS_OPEN_UNDERSCORE,
+    EMPHASIS_CLOSE_UNDERSCORE,
+
+    INLINE_NOTE_REFERENCE,
+
+    HTML_ELEMENT, // simply for good error reporting
+
+    // bd-j9cf: emitted when '<' is at the current position but no HTML
+    // construct (autolink, raw_specifier, html_comment, html_element) is
+    // recognized at this site. Consumes only the '<' character so the
+    // parser can treat it as a plain Str literal. See grammar.js
+    // (`_pandoc_literal_str`), parse_open_angle_brace, parse_star,
+    // parse_thematic_break_underscore, parse_tilde and parse_caret below.
+    LITERAL_STR,
+
+    PIPE_TABLE_DELIMITER, // to allow naked '|' in markdown
+
+    PANDOC_LINE_BREAK,
+
+    // KNOWN LIMITATION: QMD does not support `***foo***` (triple-asterisk
+    // strong+emph). Emitted from `***` followed by non-whitespace content
+    // so the parser raises Q-2-32 with the `**_foo_**` workaround.
+    // See grammar.js (`_triple_star_error`) and CONTRIBUTING.md.
+    TRIPLE_STAR,
+
+    // KNOWN LIMITATION: QMD does not support Pandoc-style grid tables.
+    // The scanner detects them opaquely (border line `+----+` followed by
+    // one or more `+`/`|` body lines) and emits a single multi-line
+    // GRID_TABLE token so pampa can surface a structured diagnostic
+    // including the captured table text. See grammar.js (`grid_table`).
+    GRID_TABLE,
+
+    // KNOWN LIMITATION: QMD does not support 4-space indented code blocks.
+    // Emitted when leftover line-leading indentation is >= 4 at a block-start
+    // position so the parser raises Q-2-59, suggesting fenced code blocks.
+    // See grammar.js (`_indented_code_block_error`) and CONTRIBUTING.md.
+    INDENTED_CODE_BLOCK_DISALLOWED,
+
+    // Issue #206: emit a ':' caption-start token only when ':' is followed by
+    // inline whitespace (or newline / EOF), NOT another ':'. Replaces the bare
+    // ':' literal in the `caption` grammar rule and kills the ambiguity with
+    // `:::` (fenced div open/close) after a pipe table row. Emission site:
+    // parse_fenced_div_marker (`level == 1` branch).
+    CAPTION_START,
+
+    // GH #943: zero-width "this block is a paragraph". Emitted at a block
+    // start only when the first word of the line ends in an apostrophe and
+    // the line is not a pipe-table header, so that the next scan call can
+    // emit the word as LITERAL_STR without PIPE_TABLE_START still being an
+    // option. See grammar.js (`pandoc_paragraph`) and
+    // parse_pipe_table_or_word_apostrophe below.
+    PARAGRAPH_START,
+    // bd-apostrophe-after-span-6l9c8c26: a `'` directly after the end of an
+    // inline construct (`_book_'s`, `[book](url)'s`), read as an apostrophe.
+    // The grammar makes it valid only in that position; see
+    // `_inline_element` in grammar.js and parse_single_quote below.
+    SPAN_APOSTROPHE,
+} TokenType;
+
+#ifdef SCAN_DEBUG
+
+static char* token_names[] = {
+    "LINE_ENDING",
+    "SOFT_LINE_ENDING",
+    "BLOCK_CLOSE",
+    "BLOCK_CONTINUATION",
+    "BLOCK_QUOTE_START",
+    "ATX_H1_MARKER",
+    "ATX_H2_MARKER",
+    "ATX_H3_MARKER",
+    "ATX_H4_MARKER",
+    "ATX_H5_MARKER",
+    "ATX_H6_MARKER",
+    "THEMATIC_BREAK",
+    "LIST_MARKER_MINUS",
+    "LIST_MARKER_PLUS",
+    "LIST_MARKER_STAR",
+    "LIST_MARKER_PARENTHESIS",
+    "LIST_MARKER_DOT",
+    "LIST_MARKER_MINUS_DONT_INTERRUPT",
+    "LIST_MARKER_PLUS_DONT_INTERRUPT",
+    "LIST_MARKER_STAR_DONT_INTERRUPT",
+    "LIST_MARKER_PARENTHESIS_DONT_INTERRUPT",
+    "LIST_MARKER_DOT_DONT_INTERRUPT",
+    "LIST_MARKER_EXAMPLE",
+    "LIST_MARKER_EXAMPLE_DONT_INTERRUPT",
+    "FENCED_CODE_BLOCK_START_BACKTICK",
+    "BLANK_LINE_START",
+    "FENCED_CODE_BLOCK_END_BACKTICK",
+    "CLOSE_BLOCK",
+    "ERROR",
+    "TRIGGER_ERROR",
+    "TOKEN_EOF",
+    "MINUS_METADATA_START",
+    "MINUS_METADATA_OPEN_NEWLINE",
+    "MINUS_METADATA_BODY",
+    "MINUS_METADATA_END",
+    "PIPE_TABLE_START",
+    "PIPE_TABLE_LINE_ENDING",
+    "FENCED_DIV_START",
+    "FENCED_DIV_END",
+    "REF_ID_SPECIFIER",
+    "FENCED_DIV_NOTE_ID",
+    "FENCED_DIV_INSERT_MARKER",
+    "FENCED_DIV_DELETE_MARKER",
+    "FENCED_DIV_EDIT_COMMENT_MARKER",
+    "FENCED_DIV_HIGHLIGHT_MARKER",
+    // code span delimiters for parsing pipe table cells
+    "CODE_SPAN_START",
+    "CODE_SPAN_CLOSE",
+    "CODE_SPAN_BACKTICK_RUN",
+    // latex span delimiters for parsing pipe table cells
+    "LATEX_SPAN_START",
+    "LATEX_SPAN_CLOSE",
+    // HTML comment token
+    "HTML_COMMENT",
+    "RAW_SPECIFIER",
+    "AUTOLINK",
+    "LANGUAGE_SPECIFIER",
+    "KEY_SPECIFIER",
+    "NAKED_VALUE_SPECIFIER",
+
+    "HIGHLIGHT_SPAN_START",
+    "INSERT_SPAN_START",
+    "DELETE_SPAN_START",
+    "COMMENT_SPAN_START",
+
+    "SINGLE_QUOTE_OPEN",
+    "SINGLE_QUOTE_CLOSE",
+    "DOUBLE_QUOTE_OPEN",
+    "DOUBLE_QUOTE_CLOSE",
+
+    "SHORTCODE_OPEN_ESCAPED",
+    "SHORTCODE_CLOSE_ESCAPED",
+    "SHORTCODE_OPEN",
+    "SHORTCODE_CLOSE",
+
+    "CITE_AUTHOR_IN_TEXT_WITH_OPEN_BRACKET",
+    "CITE_SUPPRESS_AUTHOR_WITH_OPEN_BRACKET",
+    "CITE_AUTHOR_IN_TEXT",
+    "CITE_SUPPRESS_AUTHOR",
+
+    "STRIKEOUT_OPEN",
+    "STRIKEOUT_CLOSE",
+    "SUBSCRIPT_OPEN",
+    "SUBSCRIPT_CLOSE",
+    "SUPERSCRIPT_OPEN",
+    "SUPERSCRIPT_CLOSE",
+    "INLINE_NOTE_START_TOKEN",
+
+    "STRONG_EMPHASIS_OPEN_STAR",
+    "STRONG_EMPHASIS_CLOSE_STAR",
+    "STRONG_EMPHASIS_OPEN_UNDERSCORE",
+    "STRONG_EMPHASIS_CLOSE_UNDERSCORE",
+    "EMPHASIS_OPEN_STAR",
+    "EMPHASIS_CLOSE_STAR",
+    "EMPHASIS_OPEN_UNDERSCORE",
+    "EMPHASIS_CLOSE_UNDERSCORE",
+    "INLINE_NOTE_REFERENCE",
+
+    "HTML_ELEMENT", // simply for good error reporting
+
+    "LITERAL_STR", // bd-j9cf: bare '<' that is not an HTML construct;
+                   // bd-star-as-str-qigl02pz: * _ ~ ^ that cannot delimit
+
+    "PIPE_TABLE_DELIMITER",
+
+    "PANDOC_LINE_BREAK",
+
+    "TRIPLE_STAR", // simply for good error reporting
+
+    "GRID_TABLE", // simply for good error reporting
+
+    "INDENTED_CODE_BLOCK_DISALLOWED", // simply for good error reporting
+    "CAPTION_START",
+    "PARAGRAPH_START",
+    "SPAN_APOSTROPHE",
+};
+
+#endif
+
+// Description of a block on the block stack.
+//
+// LIST_ITEM is a list item with minimal indentation (content begins at indent
+// level 2) while LIST_ITEM_MAX_INDENTATION represents a list item with maximal
+// indentation without being considered a indented code block.
+//
+// ANONYMOUS represents any block that whose close is not handled by the
+// external s.
+typedef enum {
+    BLOCK_QUOTE,
+    LIST_ITEM,
+    LIST_ITEM_1_INDENTATION,
+    LIST_ITEM_2_INDENTATION,
+    LIST_ITEM_3_INDENTATION,
+    LIST_ITEM_4_INDENTATION,
+    LIST_ITEM_5_INDENTATION,
+    LIST_ITEM_6_INDENTATION,
+    LIST_ITEM_7_INDENTATION,
+    LIST_ITEM_8_INDENTATION,
+    LIST_ITEM_9_INDENTATION,
+    LIST_ITEM_10_INDENTATION,
+    LIST_ITEM_11_INDENTATION,
+    LIST_ITEM_12_INDENTATION,
+    LIST_ITEM_13_INDENTATION,
+    LIST_ITEM_14_INDENTATION,
+    LIST_ITEM_MAX_INDENTATION,
+    FENCED_CODE_BLOCK,
+    ANONYMOUS,
+    FENCED_DIV
+} Block;
+
+static void print_valid_symbols(const bool *valid_symbols)
+{
+    // unused
+    (void)(valid_symbols);
+    #ifdef SCAN_DEBUG
+    printf("valid symbols:\n");    
+    for (int i = 0; i < sizeof(token_names) / sizeof(char *); ++i) {
+        if (valid_symbols[i]) {
+            printf("  %s\n", token_names[i]);
+        }
+    }
+    #endif
+}
+
+// Determines if a character is punctuation as defined by the markdown spec.
+static bool is_punctuation(char chr) {
+    return (chr >= '!' && chr <= '/') || (chr >= ':' && chr <= '@') ||
+           (chr >= '[' && chr <= '`') || (chr >= '{' && chr <= '~');
+}
+
+// ASCII letter — what an HTML tag name must begin with (HTML syntax §13.1.2,
+// CommonMark §6.6 "tag name"). Deliberately not locale-aware `isalpha`.
+static bool is_ascii_alpha(int32_t chr) {
+    return (chr >= 'a' && chr <= 'z') || (chr >= 'A' && chr <= 'Z');
+}
+
+// Returns the indentation level which lines of a list item should have at
+// minimum. Should only be called with blocks for which `is_list_item` returns
+// true.
+static uint8_t list_item_indentation(Block block) {
+    return (uint8_t)(block - LIST_ITEM + 2);
+}
+
+// State bitflags used with `Scanner.state`
+
+// Currently matching (at the beginning of a line)
+static const uint8_t STATE_MATCHING = 0x1 << 0;
+// Last line break was inside a paragraph
+static const uint8_t STATE_WAS_SOFT_LINE_BREAK = 0x1 << 1;
+// We're inside an ATX heading where soft line endings are disallowed; track that
+static const uint8_t STATE_INSIDE_ATX = 0x1 << 2;
+// Between a YAML metadata block's opening `---` and its closing `---`. Gates
+// the block's interior tokens so they can only fire inside a block the
+// scanner itself opened (tree-sitter marks every external token valid during
+// error recovery).
+static const uint8_t STATE_IN_MINUS_METADATA = 0x1 << 3;
+// Block should be closed after next line break
+static const uint8_t STATE_CLOSE_BLOCK = 0x1 << 4;
+
+static size_t roundup_32(size_t x) {
+    x--;
+
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+
+    x++;
+
+    return x;
+}
+
+typedef struct {
+    unsigned own_size;
+    // Size of the serialized state of the scanner.
+    // This is used to determine if we're too close to hitting
+    // tree-sitter's maximum serialized size limit of 1024 bytes,
+    // defined in tree-sitter's repo in lib/src/parser.h
+
+    // A stack of open blocks in the current parse state
+    struct {
+        size_t size;
+        size_t capacity;
+        Block *items;
+    } open_blocks;
+
+    // Parser state flags
+    uint8_t state;
+    // Number of blocks that have been matched so far. Only changes during
+    // matching and is reset after every line ending
+    uint8_t matched;
+    // Consumed but "unused" indentation. Sometimes a tab needs to be "split" to
+    // be used in multiple tokens.
+    uint8_t indentation;
+    // The current column. Used to decide how many spaces a tab should equal
+    uint8_t column;
+    // The delimiter length of the currently open fenced code block
+    uint8_t fenced_code_block_delimiter_length;
+    // The delimiter length of the currently open code span (for pipe table cells)
+    uint8_t code_span_delimiter_length;
+    // The delimiter length of the currently open latex span (for pipe table cells)
+    uint8_t latex_span_delimiter_length;
+    // Whitespace characters scan() consumed on the CURRENT call before
+    // dispatching on the first non-whitespace character. Deliberately not
+    // serialized: it is per-call scratch, reset at the top of scan(), and
+    // only read by the flanking checks in the delimiter handlers (see
+    // delimiter_preceded_by_ws). Do not use s->indentation for this: it
+    // persists across tokens and is stale mid-line.
+    uint8_t ws_before_token;
+    // Where the current line's inline content starts, as column + 1 (0 =
+    // unknown), when the last token the scanner emitted ended exactly
+    // there: a block-quote marker, a list marker, a soft line ending or a
+    // block continuation. Those tokens swallow the line's container prefix
+    // and indentation, whitespace included, so the first inline token
+    // after them sees ws_before_token == 0 and a nonzero column even
+    // though, as in CommonMark, it is at line start. See
+    // at_ws_or_line_content_start. Serialized: tree-sitter restores the
+    // state of the last emitted external token before every scan() call.
+    uint8_t line_content_column;
+    // Per-call scratch: the value note_line_content_start recorded for the
+    // token this call emits (0 if none). Copied into line_content_column
+    // by tree_sitter_avenger_qmd_external_scanner_scan on success.
+    uint8_t pending_line_content_column;
+    // GH #943: how many `pandoc_single_quote` spans are open at this point
+    // of the paragraph: +1 on SINGLE_QUOTE_OPEN, -1 on SINGLE_QUOTE_CLOSE,
+    // back to 0 at every token that ends inline content (LINE_ENDING,
+    // PIPE_TABLE_LINE_ENDING, BLOCK_CLOSE, TOKEN_EOF), all maintained in
+    // tree_sitter_avenger_qmd_external_scanner_scan. Read by
+    // word_apostrophe_candidate: a `'` after a word is an apostrophe only
+    // when no span is open, since inside one it is the span's closer. The
+    // parse state cannot answer this on its own: right after whitespace,
+    // SINGLE_QUOTE_CLOSE is not a valid symbol even inside a span, because
+    // the span's content cannot end in a space. Serialized.
+    uint8_t single_quote_depth;
+
+    bool simulate;
+} Scanner;
+
+static bool can_push_block(Scanner *s) {
+    // the serialization state size is equal
+    // to sizeof(Scanner) + sizeof(Block) * open_blocks.size
+    // If this grows over 75% of the maximum serialized size limit
+    // then we refuse to push blocks further, and purposefully fail to scan.
+    // This is to prevent the scanner from growing too large and hitting
+    // tree-sitter's maximum serialized size limit of 1024 bytes.
+    size_t serialized_size = sizeof(Scanner) + sizeof(Block) * s->open_blocks.size;
+    size_t max_serialized_size = 1024;
+    size_t max_serialized_size_limit = (max_serialized_size * 3) / 4;
+    return serialized_size < max_serialized_size_limit;
+}
+
+static void push_block(Scanner *s, Block b) {
+    if (s->open_blocks.size == s->open_blocks.capacity) {
+        s->open_blocks.capacity =
+            s->open_blocks.capacity ? s->open_blocks.capacity << 1 : 8;
+        void *tmp = realloc(s->open_blocks.items,
+                            sizeof(Block) * s->open_blocks.capacity);
+        assert(tmp != NULL);
+        s->open_blocks.items = tmp;
+    }
+
+    s->open_blocks.items[s->open_blocks.size++] = b;
+}
+
+static inline Block pop_block(Scanner *s) {
+    return s->open_blocks.items[--s->open_blocks.size];
+}
+
+// Write the whole state of a Scanner to a byte buffer
+static unsigned serialize(Scanner *s, char *buffer) {
+    unsigned size = 0;
+    for (size_t i = 0; i < sizeof(unsigned); i++) {
+        buffer[size++] = '\0';
+    }
+    buffer[size++] = (char)s->state;
+    buffer[size++] = (char)s->matched;
+    buffer[size++] = (char)s->indentation;
+    buffer[size++] = (char)s->column;
+    buffer[size++] = (char)s->fenced_code_block_delimiter_length;
+    buffer[size++] = (char)s->code_span_delimiter_length;
+    buffer[size++] = (char)s->latex_span_delimiter_length;
+    buffer[size++] = (char)s->line_content_column;
+    buffer[size++] = (char)s->single_quote_depth;
+    size_t blocks_count = s->open_blocks.size;
+    if (blocks_count > 0) {
+        memcpy(&buffer[size], s->open_blocks.items,
+               blocks_count * sizeof(Block));
+        size += blocks_count * sizeof(Block);
+    }
+    s->own_size = size;
+    return size;
+}
+
+// Read the whole state of a Scanner from a byte buffer
+// `serizalize` and `deserialize` should be fully symmetric.
+static void deserialize(Scanner *s, const char *buffer, unsigned length) {
+    s->own_size = 0;
+    s->open_blocks.size = 0;
+    s->open_blocks.capacity = 0;
+    s->state = 0;
+    s->matched = 0;
+    s->indentation = 0;
+    s->column = 0;
+    s->fenced_code_block_delimiter_length = 0;
+    s->code_span_delimiter_length = 0;
+    s->latex_span_delimiter_length = 0;
+    s->line_content_column = 0;
+    s->single_quote_depth = 0;
+    if (length > 0) {
+        size_t size = 0;
+        s->own_size = length;
+        size += sizeof(unsigned);
+        s->state = (uint8_t)buffer[size++];
+        s->matched = (uint8_t)buffer[size++];
+        s->indentation = (uint8_t)buffer[size++];
+        s->column = (uint8_t)buffer[size++];
+        s->fenced_code_block_delimiter_length = (uint8_t)buffer[size++];
+        s->code_span_delimiter_length = (uint8_t)buffer[size++];
+        s->latex_span_delimiter_length = (uint8_t)buffer[size++];
+        s->line_content_column = (uint8_t)buffer[size++];
+        s->single_quote_depth = (uint8_t)buffer[size++];
+        size_t blocks_size = length - size;
+        if (blocks_size > 0) {
+            size_t blocks_count = blocks_size / sizeof(Block);
+
+            // ensure open blocks has enough room
+            if (s->open_blocks.capacity < blocks_count) {
+              size_t capacity = roundup_32(blocks_count);
+              void *tmp = realloc(s->open_blocks.items,
+                            sizeof(Block) * capacity);
+              assert(tmp != NULL);
+              s->open_blocks.items = tmp;
+              s->open_blocks.capacity = capacity;
+            }
+            memcpy(s->open_blocks.items, &buffer[size], blocks_size);
+            s->open_blocks.size = blocks_count;
+        }
+    }
+}
+
+static void mark_end(Scanner *s, TSLexer *lexer) {
+    (void)(s);
+    // if (!s->simulate) {
+        lexer->mark_end(lexer);
+    // }
+}
+
+#define EMIT_TOKEN(TOKEN) \
+do {                                                        \
+    DEBUG_PRINT("external lexer production: " #TOKEN "\n"); \
+    lexer->result_symbol = TOKEN; \
+    return true; \
+} while (0)
+
+// Convenience function to emit the error token. This is done to stop invalid
+// parse branches. Specifically:
+// 1. When encountering a newline after a line break that ended a paragraph, and
+// no new block
+//    has been opened.
+// 2. When encountering a new block after a soft line break.
+// 3. When a `$._trigger_error` token is valid, which is used to stop parse
+// branches through
+//    normal tree-sitter grammar rules.
+// 4. When the scanner is asked to push a block but is too close to the
+//    maximum serialized size limit of 1024 bytes.
+//
+// See also the `$._soft_line_break` and `$._paragraph_end_newline` tokens in
+// grammar.js
+// static bool error(TSLexer *lexer) {
+//     EMIT_TOKEN(ERROR);
+// }
+
+#define EMIT_ERROR EMIT_TOKEN(ERROR);
+
+// Advance the lexer one character
+// Also keeps track of the current column, counting tabs as spaces with tab stop
+// 4 See https://github.github.com/gfm/#tabs
+static size_t advance(Scanner *s, TSLexer *lexer) {
+    size_t size = 1;
+    if (lexer->lookahead == '\t') {
+        size = 4 - s->column;
+        s->column = 0;
+    } else {
+        s->column = (s->column + 1) % 4;
+    }
+    lexer->advance(lexer, false);
+    return size;
+}
+
+// Try to match the given block, i.e. consume all tokens that belong to the
+// block. These are
+// 1. indentation for list items
+// 2. '>' for block quotes
+// Returns true if the block is matched and false otherwise
+static int match(Scanner *s, TSLexer *lexer, Block block) {
+    // DEBUG_EXP("%d", block);
+    // DEBUG_EXP("%d", list_item_indentation(block));
+    switch (block) {
+        case LIST_ITEM:
+        case LIST_ITEM_1_INDENTATION:
+        case LIST_ITEM_2_INDENTATION:
+        case LIST_ITEM_3_INDENTATION:
+        case LIST_ITEM_4_INDENTATION:
+        case LIST_ITEM_5_INDENTATION:
+        case LIST_ITEM_6_INDENTATION:
+        case LIST_ITEM_7_INDENTATION:
+        case LIST_ITEM_8_INDENTATION:
+        case LIST_ITEM_9_INDENTATION:
+        case LIST_ITEM_10_INDENTATION:
+        case LIST_ITEM_11_INDENTATION:
+        case LIST_ITEM_12_INDENTATION:
+        case LIST_ITEM_13_INDENTATION:
+        case LIST_ITEM_14_INDENTATION:
+        case LIST_ITEM_MAX_INDENTATION:
+            while (s->indentation < list_item_indentation(block)) {
+                if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    s->indentation += advance(s, lexer);
+                } else {
+                    break;
+                }
+            }
+            if (s->indentation >= list_item_indentation(block)) {
+                s->indentation -= list_item_indentation(block);
+                return 1;
+            }
+            // A blank line: return 2 so match_line() moves on to the next
+            // line. The lexer has already advanced past the line ending, so
+            // the BLOCK_CONTINUATION token emitted afterwards *contains* the
+            // blank line(s). pampa's code_fence_content.rs relies on this
+            // and copies those line endings back into fenced code bodies
+            // (bd-fenced-code-list-indent-wsirymk4).
+            if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+                s->indentation = 0;
+                return 2;
+            }
+            /* PREVIOUS BROKEN CODE:
+                if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+                    s->indentation = 0;
+                    return true;
+                }            
+            */
+
+            /*
+            What the algorithm here needs to be is that if we see a newline while attempting to match,
+            indentation needs to be set to zero but we need to start again from the line
+            */
+            break;
+        case BLOCK_QUOTE:
+            while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                s->indentation += advance(s, lexer);
+            }
+            if (lexer->lookahead == '>') {
+                advance(s, lexer);
+                s->indentation = 0;
+                if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    s->indentation += advance(s, lexer) - 1;
+                }
+                return 1;
+            }
+            break;
+        case FENCED_DIV:
+        case FENCED_CODE_BLOCK:
+        case ANONYMOUS:
+            return 1;
+    }
+    return 0;
+}
+
+static bool parse_fenced_div_note_id(Scanner *s, TSLexer *lexer,
+                                      const bool *valid_symbols);
+
+static bool parse_fenced_div_marker(Scanner *s, TSLexer *lexer,
+                                    const bool *valid_symbols) {
+    uint8_t level = 0;
+    while (lexer->lookahead == ':') {
+        advance(s, lexer);
+        level++;
+    }
+    mark_end(s, lexer);
+    if (level < 3) {
+        // Issue #206: a single ':' followed by inline whitespace (or
+        // newline/EOF) is a caption-start. Emit CAPTION_START so the parser
+        // can match the `caption` rule (which used to key off a literal ':'
+        // and collided with `:::`). Note that ':::' (level >= 3) has already
+        // taken the fenced-div path above, so this branch only fires for
+        // level == 1 or level == 2; level == 2 ('::') is not a valid caption
+        // start because the second char is ':' not whitespace, so the
+        // lookahead check below excludes it.
+        if (level == 1 && valid_symbols[CAPTION_START] &&
+            (lexer->eof(lexer) ||
+             lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+             lexer->lookahead == '\n' || lexer->lookahead == '\r')) {
+            EMIT_TOKEN(CAPTION_START);
+        }
+        return false;
+    }
+
+    // if this is a valid start of a fenced div marker, then it must be
+    // followed by whitespace and any other non-whitespace character
+    // (a curly brace indicates an attribute, anything else indicates
+    // an infostring)
+    //
+    // otherwise, it can only be a valid marker for the end of a fenced div
+
+    while (!lexer->eof(lexer) &&
+        (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
+        advance(s, lexer);
+    }
+    if (lexer->eof(lexer) || lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+        if (valid_symbols[FENCED_DIV_END]) {
+            EMIT_TOKEN(FENCED_DIV_END);
+        }
+    }
+    if (!lexer->eof(lexer)) {
+        if (valid_symbols[FENCED_DIV_START]) {
+            // if (!s->simulate) {
+                if (!can_push_block(s)) {
+                    EMIT_ERROR;
+                }
+                push_block(s, FENCED_DIV);
+            // }
+            EMIT_TOKEN(FENCED_DIV_START);
+        }
+    }
+    return false;
+}
+
+// Look ahead for a closing inline code-span delimiter of length `level`.
+// Returns true if a matching close exists before a blank line / EOF,
+// false otherwise. Used by both parse_code_span (mid-paragraph) and
+// parse_fenced_code_block (start-of-paragraph) so the two emission
+// sites stay in sync (bd-ilv8p). The advances are speculative; callers
+// must have called mark_end before invoking this — tree-sitter rewinds
+// to that position between scan calls.
+static bool code_span_close_exists_ahead(TSLexer *lexer, uint8_t level) {
+    size_t close_level = 0;
+    while (!lexer->eof(lexer)) {
+        if (lexer->lookahead == '`') {
+            close_level++;
+            lexer->advance(lexer, false);
+            continue;
+        }
+        if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+            // A newline terminates an in-progress matching run.
+            if (close_level == level) {
+                return true;
+            }
+            // Consume the line ending.
+            if (lexer->lookahead == '\r') {
+                lexer->advance(lexer, false);
+                if (lexer->lookahead == '\n') {
+                    lexer->advance(lexer, false);
+                }
+            } else {
+                lexer->advance(lexer, false);
+            }
+            // Skip ASCII spaces / tabs on the next line.
+            while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                lexer->advance(lexer, false);
+            }
+            // Blank line (or EOF after a whitespace-only line) is a
+            // paragraph terminator — the code span never forms.
+            if (lexer->eof(lexer) ||
+                lexer->lookahead == '\n' ||
+                lexer->lookahead == '\r') {
+                return false;
+            }
+            // Continue scanning. Do not advance past the first
+            // non-whitespace character of the new line — it may be a
+            // backtick that starts a new run. We do not skip block-
+            // continuation prefixes (`> `, list indent) here: they are
+            // ordinary non-backtick characters for the purpose of
+            // finding a closing delimiter, and the real parse pass
+            // will consume them as block_continuation tokens via the
+            // grammar's _soft_line_break rule.
+            close_level = 0;
+            continue;
+        }
+        // Other non-backtick character.
+        if (close_level == level) {
+            return true;
+        }
+        close_level = 0;
+        lexer->advance(lexer, false);
+    }
+    // EOF reached — accept if the last characters formed a matching run.
+    return close_level == level;
+}
+
+static bool parse_fenced_code_block(Scanner *s, const char delimiter,
+                                    TSLexer *lexer, const bool *valid_symbols) {
+    // count the number of backticks
+    uint8_t level = 0;
+    while (lexer->lookahead == delimiter) {
+        advance(s, lexer);
+        level++;
+    }
+    mark_end(s, lexer);
+
+    // We might need to open a code span at the start of a paragraph.
+    // Gate on the same close-ahead look-ahead used by parse_code_span
+    // (bd-ilv8p): pandoc rejects an unclosed opener and only allows
+    // the span to extend within one paragraph (no blank line crossing).
+    if (valid_symbols[CODE_SPAN_START] && delimiter == '`' && level < 3 &&
+        code_span_close_exists_ahead(lexer, level)) {
+        s->code_span_delimiter_length = level;
+        EMIT_TOKEN(CODE_SPAN_START);
+    }
+    // If this is able to close a fenced code block then that is the only valid
+    // interpretation. It can only close a fenced code block if the number of
+    // backticks is at least the number of backticks of the opening delimiter.
+    // Also it cannot be indented more than 3 spaces.
+    if ((delimiter == '`' && valid_symbols[FENCED_CODE_BLOCK_END_BACKTICK]) &&
+        s->indentation < 4 && level >= s->fenced_code_block_delimiter_length) {
+        while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            advance(s, lexer);
+        }
+        if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+            s->fenced_code_block_delimiter_length = 0;
+            EMIT_TOKEN(FENCED_CODE_BLOCK_END_BACKTICK);
+        }
+    }
+    // If this could be the start of a fenced code block, check if the info
+    // string contains any backticks.
+    if (delimiter == '`' && 
+        valid_symbols[FENCED_CODE_BLOCK_START_BACKTICK] &&
+        level >= 3) {
+        bool info_string_has_backtick = false;
+        if (delimiter == '`') {
+            while (lexer->lookahead != '\n' && lexer->lookahead != '\r' &&
+                   !lexer->eof(lexer)) {
+                if (lexer->lookahead == '`') {
+                    info_string_has_backtick = true;
+                    break;
+                }
+                advance(s, lexer);
+            }
+        }
+        // bd-nycn85a8: a backtick fence whose info string contains a
+        // backtick is not a fence (CommonMark), so the line is paragraph
+        // text and the run may open a code span instead: "``` x ``` b" is
+        // a paragraph starting with the span `x`. The look-ahead starts at
+        // the first inner backtick, which is where a closing run could
+        // begin, since everything before it was backtick-free.
+        if (info_string_has_backtick && valid_symbols[CODE_SPAN_START] &&
+            code_span_close_exists_ahead(lexer, level)) {
+            s->code_span_delimiter_length = level;
+            EMIT_TOKEN(CODE_SPAN_START);
+        }
+        // If it does not then choose to interpret this as the start of a fenced
+        // code block.
+        if (!info_string_has_backtick) {
+            // if (!s->simulate) {
+                if (!can_push_block(s)) {
+                    EMIT_ERROR;
+                }
+                push_block(s, FENCED_CODE_BLOCK);
+            // }
+            // Remember the length of the delimiter for later, since we need it
+            // to decide whether a sequence of backticks can close the block.
+            s->fenced_code_block_delimiter_length = level;
+            s->indentation = 0;
+            EMIT_TOKEN(FENCED_CODE_BLOCK_START_BACKTICK);
+        }
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// Inline delimiter flanking (bd-star-as-str-qigl02pz,
+// bd-whitespace-flanked-delimiters-0ncy8bgq).
+//
+// CommonMark §6.2: a `*` / `_` run followed by whitespace is not
+// left-flanking and cannot OPEN emphasis; a run preceded by whitespace (or
+// at the start of a line) is not right-flanking and cannot CLOSE it. A run
+// that can do neither is literal text, emitted as LITERAL_STR (the same
+// token the bare `<` fix, bd-j9cf, uses) and folded into `pandoc_str` by
+// the grammar. Before this, `a * b`, `foo *`, `O(N * D)` were Q-2-12
+// errors and `a * b * c` silently rendered as `a <em>b</em> c`.
+//
+// "Preceded by whitespace" is knowable because tree-sitter tries the
+// external scanner before the internal `_whitespace` regex at every token
+// boundary: scan() consumes the whitespace in front of the run into
+// ws_before_token and the emitted token starts at that whitespace
+// (treesitter.rs splits it back out into a Space). Every parser state that
+// admits a closer also admits an opener and pandoc_str, so the first call
+// at a position always emits and the information is never lost.
+//
+// get_column is O(column) but runs at most once per delimiter run. Known
+// approximation: a container prefix consumed by match_line (`> `, list
+// continuation indent) is not counted, so a closer that is the very first
+// character of a quoted/indented continuation line may still close; that
+// is today's behaviour, never a new error.
+static bool delimiter_preceded_by_ws(Scanner *s, TSLexer *lexer) {
+    return s->ws_before_token > 0 || lexer->get_column(lexer) == 0;
+}
+
+// Record that the token about to be emitted ends where the line's inline
+// content starts (Scanner.line_content_column). Call it only where the
+// token's end is the lexer's current position: mark_end was just called
+// there, or not at all during this scan() call. A token whose range was
+// left behind a peek must not call it; the anchor would be too far right.
+static void note_line_content_start(Scanner *s, TSLexer *lexer) {
+    uint32_t column = lexer->get_column(lexer);
+    s->pending_line_content_column =
+        column < UINT8_MAX ? (uint8_t)(column + 1) : 0;
+}
+
+// delimiter_preceded_by_ws, plus: at the start of a line's content after a
+// container prefix or indentation (`> @ b`, `- @ b`, `text\n  @ b`), which
+// CommonMark treats as line start. Used by the bare-`@` rule
+// (bd-bare-at-literal-w3ytmu8e); the emphasis flanking rules above still
+// use delimiter_preceded_by_ws and keep their documented approximation.
+//
+// The anchor is exact within a line: tree-sitter lexes any token between
+// the anchoring token and here without changing the restored scanner state,
+// but the column only grows along the line. Across lines it relies on every
+// line break being an external token, which replaces the anchor. The few
+// internal tokens that can span a newline (multi-line display math, a
+// quoted shortcode string) could leave a stale anchor that happens to
+// equal a later `@`'s column; the consequence is bounded to reading that
+// `@` as literal text, which is what pandoc does anyway.
+static bool at_ws_or_line_content_start(Scanner *s, TSLexer *lexer) {
+    if (s->ws_before_token > 0) return true;
+    uint32_t column = lexer->get_column(lexer);
+    return column == 0 || (s->line_content_column != 0 &&
+                           column + 1 == s->line_content_column);
+}
+
+static bool at_ws_or_eol(TSLexer *lexer) {
+    return lexer->eof(lexer) || lexer->lookahead == ' ' ||
+           lexer->lookahead == '\t' || lexer->lookahead == '\n' ||
+           lexer->lookahead == '\r';
+}
+
+// Pandoc's markdown rule for `~sub~` / `^sup^`: the content may contain no
+// unescaped whitespace, so an opener is only an opener if its closer shows
+// up before the next whitespace/EOL/EOF. The lexer is just past the opener
+// and no mark_end is called while peeking, so the token stays one char.
+static bool closer_before_ws(TSLexer *lexer, int32_t delimiter) {
+    for (;;) {
+        if (at_ws_or_eol(lexer)) return false;
+        if (lexer->lookahead == '\\') {
+            lexer->advance(lexer, false);
+            if (lexer->eof(lexer)) return false;
+            lexer->advance(lexer, false);
+            continue;
+        }
+        if (lexer->lookahead == delimiter) return true;
+        lexer->advance(lexer, false);
+    }
+}
+
+static bool parse_star(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // Must be computed before advancing past the first star.
+    bool preceded_by_ws = delimiter_preceded_by_ws(s, lexer);
+    advance(s, lexer);
+    mark_end(s, lexer);
+    // Count the number of stars permitting whitespace between them (a
+    // thematic break is `* * *`), and separately the CONTIGUOUS run, which
+    // is what emphasis and the literal fallback are about. mark_end after
+    // each star of the contiguous run so the token can end there even
+    // though the loop goes on to consume the whitespace after it.
+    size_t star_count = 1;
+    size_t run_len = 1;
+    // ...and how many spaces follow the first star.
+    uint8_t extra_indentation = 0;
+    bool no_spaces = true;
+    for (;;) {
+        if (lexer->lookahead == '*') {
+            if (star_count == 1 && extra_indentation >= 1 &&
+                valid_symbols[LIST_MARKER_STAR]) {
+                // If we get to this point then the token has to be at least
+                // this long. We need to call `mark_end` here in case we decide
+                // later that this is a list item.
+                mark_end(s, lexer);
+            }
+            star_count++;
+            advance(s, lexer);
+            if (no_spaces) {
+                run_len++;
+                mark_end(s, lexer);
+            }
+        } else if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            no_spaces = false;
+            if (star_count == 1) {
+                extra_indentation += advance(s, lexer);
+            } else {
+                advance(s, lexer);
+            }
+        } else {
+            break;
+        }
+    }
+    bool line_end = lexer->lookahead == '\n' || lexer->lookahead == '\r';
+    // The contiguous run is followed by whitespace, a line ending or EOF:
+    // not left-flanking.
+    bool followed_by_ws = !no_spaces || line_end || lexer->eof(lexer);
+    bool dont_interrupt = false;
+    if (star_count == 1 && line_end) {
+        extra_indentation = 1;
+        // line is empty so don't interrupt paragraphs if this is a list marker
+        dont_interrupt = s->matched == s->open_blocks.size;
+    }
+    // bd-qhb2o: gate TRIPLE_STAR emission on valid_symbols[EMPHASIS_OPEN_STAR].
+    // TRIPLE_STAR is intentionally an error-trigger token — the merr-style
+    // state→Q-code table (resources/error-corpus/_autogen-table.json) maps
+    // the resulting parse error to Q-2-32 (`***` disallowed, suggest `*__`).
+    // Before bd-ilv8p the external scanner was never invoked inside
+    // pandoc_code_span content (the content rule was pure-regex), so emitting
+    // TRIPLE_STAR unconditionally was harmless. bd-ilv8p added a
+    // _soft_line_break alternative to the content rule, putting an external
+    // token in the valid-symbols set for code-span content states; the
+    // scanner is now called there, and an unconditional TRIPLE_STAR emission
+    // produces a spurious Q-2-32 on well-formed pandoc input like `\`***\``
+    // (which should parse to Code "***").
+    //
+    // EMPHASIS_OPEN_STAR is the cleanest discriminator because TRIPLE_STAR
+    // is *only* meaningful in states where emphasis could plausibly open —
+    // it diagnoses the user's apparent intent to write `***foo***` (strong+
+    // emph). Inside code-span content emphasis cannot open, so
+    // EMPHASIS_OPEN_STAR is not in the valid-symbols set there; at document
+    // / paragraph / span / list-item / etc. levels it is. The same gate
+    // also harmlessly suppresses TRIPLE_STAR in any other future state
+    // that does not admit emphasis opens (e.g. attribute-spec values).
+    //
+    // Note that valid_symbols[TRIPLE_STAR] itself cannot be the gate: the
+    // token is deliberately *not* in any parser state's valid set — its
+    // whole role is to provoke a parse error that the autogen table
+    // catches. So gating on it would suppress every emission and break
+    // Q-2-32 entirely.
+    if (valid_symbols[EMPHASIS_OPEN_STAR] && run_len == 3 && !followed_by_ws) {
+        EMIT_TOKEN(TRIPLE_STAR);
+    }
+    // If there were at least 3 stars then this could be a thematic break
+    bool thematic_break = star_count >= 3 && line_end;
+    // If there was a star and at least one space after that star then this
+    // could be a list marker.
+    bool list_marker_star = star_count >= 1 && extra_indentation >= 1;
+    if (valid_symbols[THEMATIC_BREAK] && thematic_break && s->indentation < 4) {
+        // If a thematic break is valid then it takes precedence
+        mark_end(s, lexer);
+        s->indentation = 0;
+        EMIT_TOKEN(THEMATIC_BREAK);
+    }
+    if ((dont_interrupt ? valid_symbols[LIST_MARKER_STAR_DONT_INTERRUPT]
+                        : valid_symbols[LIST_MARKER_STAR]) &&
+        list_marker_star) {
+        // List markers take precedence over emphasis markers
+        // If star_count > 1 then we already called mark_end at the right point.
+        // Otherwise the token should go until this point.
+        if (star_count == 1) {
+            mark_end(s, lexer);
+            note_line_content_start(s, lexer);
+        }
+        // Not counting one space...
+        extra_indentation--;
+        // ... check if the list item begins with an indented code block
+        if (extra_indentation <= 3) {
+            // If not then calculate the indentation level of the list item
+            // content as indentation of list marker + indentation after list
+            // marker - 1
+            extra_indentation += s->indentation;
+            s->indentation = 0;
+        } else {
+            // Otherwise the indentation level is just the indentation of the
+            // list marker. We keep the indentation after the list marker for
+            // later blocks.
+            uint8_t temp = s->indentation;
+            s->indentation = extra_indentation;
+            extra_indentation = temp;
+        }
+        // if (!s->simulate) {
+            if (!can_push_block(s)) {
+                EMIT_ERROR;
+            }
+            push_block(s, (Block)(LIST_ITEM + extra_indentation));
+        // }
+        if (dont_interrupt) {
+            EMIT_TOKEN(LIST_MARKER_STAR_DONT_INTERRUPT);
+        } else {
+            EMIT_TOKEN(LIST_MARKER_STAR);
+        }
+        return true;
+    }
+    // Inline emphasis. The token end is already at the end of the
+    // contiguous run (see the loop). Closers are tried before openers, as
+    // before, but only when flanking allows each.
+    bool can_open = !followed_by_ws;
+    bool can_close = !preceded_by_ws;
+    if (run_len == 1) {
+        if (can_close && valid_symbols[EMPHASIS_CLOSE_STAR]) {
+            EMIT_TOKEN(EMPHASIS_CLOSE_STAR);
+        }
+        if (can_open && valid_symbols[EMPHASIS_OPEN_STAR]) {
+            EMIT_TOKEN(EMPHASIS_OPEN_STAR);
+        }
+    } else if (run_len == 2) {
+        if (can_close && valid_symbols[STRONG_EMPHASIS_CLOSE_STAR]) {
+            EMIT_TOKEN(STRONG_EMPHASIS_CLOSE_STAR);
+        }
+        if (can_open && valid_symbols[STRONG_EMPHASIS_OPEN_STAR]) {
+            EMIT_TOKEN(STRONG_EMPHASIS_OPEN_STAR);
+        }
+    }
+    // Neither a block-level use nor an emphasis delimiter: literal text.
+    if (followed_by_ws && valid_symbols[LITERAL_STR]) {
+        EMIT_TOKEN(LITERAL_STR);
+    }
+    return false;
+}
+
+static bool parse_thematic_break_underscore(Scanner *s, TSLexer *lexer,
+                                            const bool *valid_symbols) {
+    // Same flanking rules as parse_star (see the comment there). Intraword
+    // underscores never reach here: PANDOC_REGEX_STR keeps `snake_case`
+    // inside one pandoc_str token.
+    bool preceded_by_ws = delimiter_preceded_by_ws(s, lexer);
+    advance(s, lexer);
+    mark_end(s, lexer);
+    size_t underscore_count = 1;
+    size_t run_len = 1;
+    bool no_spaces = true;
+    for (;;) {
+        if (lexer->lookahead == '_') {
+            underscore_count++;
+            advance(s, lexer);
+            if (no_spaces) {
+                run_len++;
+                mark_end(s, lexer);
+            }
+        } else if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            no_spaces = false;
+            advance(s, lexer);
+        } else {
+            break;
+        }
+    }
+    bool line_end = lexer->lookahead == '\n' || lexer->lookahead == '\r';
+    if (underscore_count >= 3 && line_end && valid_symbols[THEMATIC_BREAK]) {
+        mark_end(s, lexer);
+        s->indentation = 0;
+        EMIT_TOKEN(THEMATIC_BREAK);
+    }
+    bool followed_by_ws = !no_spaces || line_end || lexer->eof(lexer);
+    bool can_open = !followed_by_ws;
+    bool can_close = !preceded_by_ws;
+    if (run_len == 1) {
+        if (can_close && valid_symbols[EMPHASIS_CLOSE_UNDERSCORE]) {
+            EMIT_TOKEN(EMPHASIS_CLOSE_UNDERSCORE);
+        }
+        if (can_open && valid_symbols[EMPHASIS_OPEN_UNDERSCORE]) {
+            EMIT_TOKEN(EMPHASIS_OPEN_UNDERSCORE);
+        }
+    } else if (run_len == 2) {
+        if (can_close && valid_symbols[STRONG_EMPHASIS_CLOSE_UNDERSCORE]) {
+            EMIT_TOKEN(STRONG_EMPHASIS_CLOSE_UNDERSCORE);
+        }
+        if (can_open && valid_symbols[STRONG_EMPHASIS_OPEN_UNDERSCORE]) {
+            EMIT_TOKEN(STRONG_EMPHASIS_OPEN_UNDERSCORE);
+        }
+    }
+    if (followed_by_ws && valid_symbols[LITERAL_STR]) {
+        EMIT_TOKEN(LITERAL_STR);
+    }
+    return false;
+}
+
+static bool parse_block_quote(Scanner *s, TSLexer *lexer,
+                              const bool *valid_symbols) {
+    if (valid_symbols[BLOCK_QUOTE_START]) {
+        advance(s, lexer);
+        s->indentation = 0;
+        if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            s->indentation += advance(s, lexer) - 1;
+        }
+        // if (!s->simulate) {
+            if (!can_push_block(s)) {
+                EMIT_ERROR;
+            }
+            push_block(s, BLOCK_QUOTE);
+        // }
+        // No mark_end during this call: the token ends at the lexer.
+        note_line_content_start(s, lexer);
+        EMIT_TOKEN(BLOCK_QUOTE_START);
+    }
+    return false;
+}
+
+static bool parse_atx_heading(Scanner *s, TSLexer *lexer,
+                              const bool *valid_symbols) {
+    if (valid_symbols[ATX_H1_MARKER] && s->indentation <= 3) {
+        mark_end(s, lexer);
+        uint16_t level = 0;
+        while (lexer->lookahead == '#' && level <= 6) {
+            advance(s, lexer);
+            level++;
+        }
+        if (level <= 6 &&
+            (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+             lexer->lookahead == '\n' || lexer->lookahead == '\r')) {
+            s->indentation = 0;
+            mark_end(s, lexer);
+            s->state = s->state | STATE_INSIDE_ATX;
+            EMIT_TOKEN(ATX_H1_MARKER + (level - 1));
+        }
+    }
+    return false;
+}
+
+// parse_grid_table_after_first_plus consumes the rest of a Pandoc-style
+// grid table after the leading '+' has already been advanced. It greedily
+// consumes border lines (`+----+`) and body lines (`| ... |`) across
+// nested block-quote prefixes. On success it emits a single multi-line
+// GRID_TABLE token spanning from the original '+' through the last
+// matching body line. On failure it returns false (lexer state is
+// abandoned, tree-sitter handles rewinding when scan() returns false).
+//
+// QMD does not actually support grid tables; the GRID_TABLE node exists
+// purely so pampa can capture its full text and emit a structured
+// diagnostic naming the construct.
+static bool parse_grid_table_after_first_plus(Scanner *s, TSLexer *lexer) {
+    bool saw_dash_or_eq = false;
+    while (lexer->lookahead == '-' || lexer->lookahead == '=' ||
+           lexer->lookahead == '+') {
+        if (lexer->lookahead == '-' || lexer->lookahead == '=') {
+            saw_dash_or_eq = true;
+        }
+        advance(s, lexer);
+    }
+    if (!saw_dash_or_eq) {
+        return false;
+    }
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+        advance(s, lexer);
+    }
+    if (lexer->lookahead != '\n' && lexer->lookahead != '\r' &&
+        !lexer->eof(lexer)) {
+        return false;
+    }
+
+    // First line is a valid '+----+' border. We require at least one
+    // following body line ('+' border or '|' data row) to commit to a
+    // grid table; a lone border line should fall back to paragraph parsing.
+    bool committed = false;
+
+    for (;;) {
+        if (lexer->eof(lexer)) {
+            break;
+        }
+        // Consume the trailing newline of the previous line.
+        if (lexer->lookahead == '\r') {
+            advance(s, lexer);
+            if (lexer->lookahead == '\n') {
+                advance(s, lexer);
+            }
+        } else if (lexer->lookahead == '\n') {
+            advance(s, lexer);
+        } else {
+            break;
+        }
+
+        // Strip block-quote prefixes for every currently-open BLOCK_QUOTE
+        // so nested grid tables (`> > +----+`) are captured correctly.
+        s->indentation = 0;
+        s->column = 0;
+        bool prefixes_ok = true;
+        for (size_t i = 0; i < s->open_blocks.size; i++) {
+            Block b = s->open_blocks.items[i];
+            if (b == BLOCK_QUOTE) {
+                while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    advance(s, lexer);
+                }
+                if (lexer->lookahead != '>') {
+                    prefixes_ok = false;
+                    break;
+                }
+                advance(s, lexer);
+                if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    advance(s, lexer);
+                }
+            } else {
+                while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    advance(s, lexer);
+                }
+            }
+        }
+        if (!prefixes_ok) {
+            break;
+        }
+
+        while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            advance(s, lexer);
+        }
+
+        if (lexer->lookahead != '+' && lexer->lookahead != '|') {
+            break;
+        }
+
+        // Consume the rest of this body line.
+        while (lexer->lookahead != '\n' && lexer->lookahead != '\r' &&
+               !lexer->eof(lexer)) {
+            advance(s, lexer);
+        }
+
+        committed = true;
+        mark_end(s, lexer);
+    }
+
+    if (!committed) {
+        return false;
+    }
+
+    s->indentation = 0;
+    s->column = 0;
+    EMIT_TOKEN(GRID_TABLE);
+}
+
+static bool parse_plus(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    bool can_grid = valid_symbols[GRID_TABLE];
+    bool can_list = s->indentation <= 3 &&
+        (valid_symbols[LIST_MARKER_PLUS] ||
+         valid_symbols[LIST_MARKER_PLUS_DONT_INTERRUPT]);
+    if (!can_grid && !can_list) {
+        return false;
+    }
+
+    advance(s, lexer);
+
+    // Disambiguate based on the character following the leading '+':
+    //   '-', '=', '+'  → grid-table border line  (must be valid)
+    //   ' ', '\t', EOL → list marker             (must be valid)
+    if (can_grid && (lexer->lookahead == '-' || lexer->lookahead == '=' ||
+                     lexer->lookahead == '+')) {
+        return parse_grid_table_after_first_plus(s, lexer);
+    }
+
+    if (can_list) {
+        uint8_t extra_indentation = 0;
+        while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            extra_indentation += advance(s, lexer);
+        }
+        bool dont_interrupt = false;
+        if (lexer->lookahead == '\r' || lexer->lookahead == '\n') {
+            extra_indentation = 1;
+            dont_interrupt = true;
+        }
+        dont_interrupt =
+            dont_interrupt && s->matched == s->open_blocks.size;
+        if (extra_indentation >= 1 &&
+            (dont_interrupt ? valid_symbols[LIST_MARKER_PLUS_DONT_INTERRUPT]
+                            : valid_symbols[LIST_MARKER_PLUS])) {
+            extra_indentation--;
+            if (extra_indentation <= 3) {
+                extra_indentation += s->indentation;
+                s->indentation = 0;
+            } else {
+                uint8_t temp = s->indentation;
+                s->indentation = extra_indentation;
+                extra_indentation = temp;
+            }
+            // if (!s->simulate) {
+                if (!can_push_block(s)) {
+                    EMIT_ERROR;
+                }
+                push_block(s, (Block)(LIST_ITEM + extra_indentation));
+            // }
+            // No mark_end during this call: the token ends at the lexer.
+            note_line_content_start(s, lexer);
+            if (dont_interrupt) {
+                EMIT_TOKEN(LIST_MARKER_PLUS_DONT_INTERRUPT);
+            } else {
+                EMIT_TOKEN(LIST_MARKER_PLUS);
+            }
+        }
+    }
+    return false;
+}
+
+static bool parse_ordered_list_marker(Scanner *s, TSLexer *lexer,
+                                      const bool *valid_symbols) {
+    if (s->indentation <= 3 &&
+        (valid_symbols[LIST_MARKER_PARENTHESIS] ||
+         valid_symbols[LIST_MARKER_DOT] ||
+         valid_symbols[LIST_MARKER_PARENTHESIS_DONT_INTERRUPT] ||
+         valid_symbols[LIST_MARKER_DOT_DONT_INTERRUPT])) {
+        size_t digits = 1;
+        bool dont_interrupt = lexer->lookahead != '1';
+        advance(s, lexer);
+        while (iswdigit(lexer->lookahead)) {
+            dont_interrupt = true;
+            digits++;
+            advance(s, lexer);
+        }
+        if (digits >= 1 && digits <= 9) {
+            bool dot = false;
+            bool parenthesis = false;
+            if (lexer->lookahead == '.') {
+                advance(s, lexer);
+                dot = true;
+            } else if (lexer->lookahead == ')') {
+                advance(s, lexer);
+                parenthesis = true;
+            }
+            if (dot || parenthesis) {
+                uint8_t extra_indentation = 0;
+                while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    extra_indentation += advance(s, lexer);
+                }
+                bool line_end =
+                    lexer->lookahead == '\n' || lexer->lookahead == '\r';
+                if (line_end) {
+                    extra_indentation = 1;
+                    dont_interrupt = true;
+                }
+                dont_interrupt =
+                    dont_interrupt && s->matched == s->open_blocks.size;
+                if (extra_indentation >= 1 &&
+                    (dot ? (dont_interrupt
+                                ? valid_symbols[LIST_MARKER_DOT_DONT_INTERRUPT]
+                                : valid_symbols[LIST_MARKER_DOT])
+                         : (dont_interrupt
+                                ? valid_symbols
+                                      [LIST_MARKER_PARENTHESIS_DONT_INTERRUPT]
+                                : valid_symbols[LIST_MARKER_PARENTHESIS]))) {
+                    extra_indentation--;
+                    if (extra_indentation <= 3) {
+                        extra_indentation += s->indentation;
+                        s->indentation = 0;
+                    } else {
+                        uint8_t temp = s->indentation;
+                        s->indentation = extra_indentation;
+                        extra_indentation = temp;
+                    }
+                    // if (!s->simulate) {
+                        if (!can_push_block(s)) {
+                            EMIT_ERROR;
+                        }
+                        push_block(
+                            s, (Block)(LIST_ITEM + extra_indentation + digits));
+                    // }
+                    // No mark_end during this call: the token ends at the lexer.
+                    note_line_content_start(s, lexer);
+                    if (dot) {
+                        EMIT_TOKEN(LIST_MARKER_DOT);
+                    } else {
+                        EMIT_TOKEN(LIST_MARKER_PARENTHESIS);
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// bd-w6tod0gh: peek helpers for the SOFT_LINE_ENDING gates.
+//
+// The gates decide whether a continuation line ends the open paragraph. They
+// must exclude a leading character only when it *actually* opens a block —
+// the same discipline the '`' and '*' peeks already follow. A blanket
+// character-class exclusion splits prose that merely happens to start with
+// that character ("...leases last\n30 minutes...").
+//
+// Like those peeks, these advance the lexer WITHOUT calling mark_end:
+// tree-sitter rewinds to the last mark_end between scan calls, so the
+// advance is undone for the LINE_ENDING fall-through path.
+
+// Result of peeking at a digit-leading line. The two gates need different
+// answers from the same peek, because they ask different questions:
+//
+//   - The FIRST gate runs before match_line, so it cannot yet tell a sibling
+//     list item from a paragraph continuation. It must only ask "could this
+//     line open a block at all?" — `well_formed`. Answering the stricter
+//     question here would swallow '2.' in "1. a / 2. b" into item 1's
+//     paragraph, because the first gate has no all_will_be_matched guard.
+//
+//   - The SECOND gate runs after match_line, with all_will_be_matched proving
+//     the line belongs to the currently-open blocks. Only there is the
+//     CommonMark interruption rule the right question — `may_interrupt`.
+//
+// That split is what separates two cases identical at the character level:
+//
+//   ...my house is     14. cannot interrupt a paragraph -> soft-break (CM 284)
+//   14.  The number...
+//
+//   1. a               2. is a sibling item; match_line fails to match item
+//   2. b               1's indent, so the second gate never fires -> new item
+//
+// Note this deliberately does NOT consult valid_symbols the way
+// parse_ordered_list_marker does: at line-ending scan time the parser is
+// asking for LINE_ENDING / SOFT_LINE_ENDING, so the LIST_MARKER_* symbols are
+// not in the valid set and would read as false for every marker.
+typedef struct {
+    bool well_formed;    // <=9 digits, then '.' or ')', then whitespace/EOL
+    bool may_interrupt;  // ...and CommonMark lets it interrupt a paragraph
+} OrderedMarkerPeek;
+
+// How many columns of a line's leading indentation the open blocks
+// could claim as list-item continuation indent, summed over the
+// LEADING run of LIST_ITEM* blocks on the stack. The first
+// SOFT_LINE_ENDING gate runs before match_line, so `s->indentation`
+// there is the raw column count including any open item's content
+// columns; raw minus this value is the indent relative to the
+// innermost list content column — the reference point CommonMark's
+// "a marker may be indented at most 3 spaces" rule needs.
+//
+// Blocks that match a continuation line without consuming anything —
+// FENCED_DIV, FENCED_CODE_BLOCK, ANONYMOUS (see match(), they just
+// `return 1`) — are transparent: they contribute nothing but do not
+// stop the walk, so a div wrapping a list does not change how nested
+// markers are judged (first fix attempt for bd-j7be7kuc broke
+// `::: {.x}` + `* a` + 4-space `1. b` by stopping here). A
+// BLOCK_QUOTE stops the walk: it claims a '>' prefix, not
+// whitespace, so on a lazy continuation line (no '>') nothing at or
+// past the quote can claim indentation.
+// Is any list item open? A `*` alone on a line is an EMPTY list item:
+// CommonMark lets it start a sibling item inside an open list but not
+// interrupt a top-level paragraph (bd-star-as-str-qigl02pz, `para\n*`).
+static bool any_list_item_open(Scanner *s) {
+    for (size_t i = 0; i < s->open_blocks.size; i++) {
+        Block b = s->open_blocks.items[i];
+        if (b >= LIST_ITEM && b <= LIST_ITEM_MAX_INDENTATION) return true;
+    }
+    return false;
+}
+
+static uint8_t claimable_list_indentation(Scanner *s) {
+    uint8_t claimed = 0;
+    for (size_t i = 0; i < s->open_blocks.size; i++) {
+        Block b = s->open_blocks.items[i];
+        if (b >= LIST_ITEM && b <= LIST_ITEM_MAX_INDENTATION) {
+            claimed += list_item_indentation(b);
+        } else if (b == FENCED_DIV || b == FENCED_CODE_BLOCK ||
+                   b == ANONYMOUS) {
+            continue;
+        } else {
+            break;
+        }
+    }
+    return claimed;
+}
+
+// Bails out past 9 digits, the longest marker parse_ordered_list_marker
+// accepts, so a pathological digit run costs a bounded peek.
+//
+// Shape-only: this asks whether the CHARACTERS form a marker, with no
+// indentation judgment. Whether the position allows a marker is the
+// caller's job, because the answer depends on which gate is asking:
+// at gate 1 `s->indentation` is the line's raw indent (block prefixes
+// not yet consumed — compare against claimable_list_indentation), at
+// gate 2 it is the residual indent after match_line (compare against
+// 3 directly). bd-indented-continuation-parse-error-j7be7kuc was
+// partly caused by an `s->indentation > 3` guard here that was only
+// correct for one of those call sites. Callers must ensure the peek
+// is only run when they will honor its advance (it always consumes at
+// least one character).
+static OrderedMarkerPeek peek_ordered_marker(Scanner *s, TSLexer *lexer) {
+    OrderedMarkerPeek result = {false, false};
+    // Only a bare '1' may interrupt a paragraph (CommonMark); any longer run
+    // or any other digit may not.
+    bool dont_interrupt = lexer->lookahead != '1';
+    size_t digits = 1;
+    advance(s, lexer);
+    while (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
+        dont_interrupt = true;
+        digits++;
+        if (digits > 9) {
+            return result;  // longer than any legal marker
+        }
+        advance(s, lexer);
+    }
+    if (lexer->lookahead == '.') {
+        advance(s, lexer);
+    } else if (lexer->lookahead == ')') {
+        advance(s, lexer);
+    } else {
+        return result;
+    }
+    // A marker must be followed by whitespace, or end the line.
+    bool line_end = lexer->lookahead == '\n' || lexer->lookahead == '\r' ||
+                    lexer->eof(lexer);
+    if (lexer->lookahead != ' ' && lexer->lookahead != '\t' && !line_end) {
+        return result;
+    }
+    // An empty list item cannot interrupt a paragraph either.
+    if (line_end) {
+        dont_interrupt = true;
+    }
+    result.well_formed = true;
+    result.may_interrupt = !dont_interrupt;
+    return result;
+}
+
+// True when the upcoming '-'/'+' run opens a block: a single marker followed
+// by whitespace/EOL (list item), or 3+ dashes followed by whitespace/EOL
+// (thematic break). Mirrors the '*' peek. A run that is neither — "-5
+// degrees", "-- em dash" — is prose and must soft-break.
+static bool peek_dash_plus_opens_block(Scanner *s, TSLexer *lexer) {
+    int32_t marker = lexer->lookahead;
+    int level = 0;
+    while (lexer->lookahead == marker) {
+        advance(s, lexer);
+        level++;
+    }
+    bool trailing_ws_or_eol = (lexer->lookahead == ' ' ||
+                               lexer->lookahead == '\t' ||
+                               lexer->lookahead == '\n' ||
+                               lexer->lookahead == '\r' ||
+                               lexer->eof(lexer));
+    if (level == 1 && trailing_ws_or_eol) {
+        return true;  // list marker
+    }
+    // Only '-' forms a thematic break; '+++' is not one in CommonMark.
+    return marker == '-' && level >= 3 && trailing_ws_or_eol;
+}
+
+// True when the upcoming line forms a footnote definition's opening
+// specifier -- '[^id]:' followed by whitespace and a non-empty body.
+// That is the block form of `inline_ref_def` (grammar.js:283), and like
+// '#' or '-' it must interrupt an open paragraph. Mirrors
+// parse_ref_id_specifier's identifier rule (scanner.c:1808) so the peek
+// and the real parser agree on what a specifier is.
+//
+// DELIBERATELY STRICTER THAN parse_ref_id_specifier, and the extra
+// strictness is load-bearing. The grammar rule is
+// seq(ref_id_specifier, _whitespace, pandoc_paragraph), so the
+// whitespace and the body are both mandatory: '[^x]:two.' (no space)
+// and '[^x]:' (empty body) parse to an ERROR node even at block start.
+// If this peek called those block openers, the gate would suppress the
+// soft break and the line would then fail to form any block -- a hard
+// parse error, which drops the WHOLE FILE from the render rather than
+// just the block. That is the bd-j7be7kuc failure mode. The invariant
+// to preserve when editing: this peek must never be LOOSER than what
+// inline_ref_def actually accepts. Being stricter is always safe (the
+// line merely stays paragraph continuation, today's behavior); being
+// looser turns a benign paragraph into an unrenderable file.
+//
+// Shape-only, like peek_ordered_marker: no indentation judgment here,
+// because s->indentation means different things at the two gates. The
+// caller decides whether the position allows a block to open.
+//
+// bd-miif1k1z. Scoped to the '[^id]:' footnote form only: qmd has no
+// link reference definitions -- '[ref]: url' parses as a bracket span
+// plus literal text -- so there is no second bracket form to serve.
+static bool peek_ref_id_specifier(Scanner *s, TSLexer *lexer) {
+    // precondition: lexer->lookahead == '['
+    advance(s, lexer);
+    if (lexer->lookahead != '^') {
+        return false;
+    }
+    advance(s, lexer);
+    // Identifier characters, per parse_ref_id_specifier and the pandoc
+    // manual: no spaces, tabs, newlines, '^', '[' or ']'. An empty id
+    // is accepted ('[^]: x' parses), so this loop may run zero times.
+    // '\r' and EOF are excluded here but not in parse_ref_id_specifier;
+    // that is the safe direction (see the strictness note above).
+    while (!lexer->eof(lexer) && lexer->lookahead != ' ' &&
+           lexer->lookahead != '\t' && lexer->lookahead != '\n' &&
+           lexer->lookahead != '\r' && lexer->lookahead != '^' &&
+           lexer->lookahead != '[' && lexer->lookahead != ']') {
+        advance(s, lexer);
+    }
+    if (lexer->lookahead != ']') {
+        return false;
+    }
+    advance(s, lexer);
+    if (lexer->lookahead != ':') {
+        return false;
+    }
+    advance(s, lexer);
+    // _whitespace between the specifier and the body is mandatory.
+    if (lexer->lookahead != ' ' && lexer->lookahead != '\t') {
+        return false;
+    }
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+        advance(s, lexer);
+    }
+    // ...and the body must be non-empty on this line.
+    return !lexer->eof(lexer) && lexer->lookahead != '\n' &&
+           lexer->lookahead != '\r';
+}
+
+static bool parse_example_list_marker(Scanner *s, TSLexer *lexer,
+                                       const bool *valid_symbols) {
+    if (s->indentation <= 3 &&
+        (valid_symbols[LIST_MARKER_EXAMPLE] ||
+         valid_symbols[LIST_MARKER_EXAMPLE_DONT_INTERRUPT])) {
+        // Must be (@)
+        if (lexer->lookahead != '(') {
+            return false;
+        }
+        advance(s, lexer);
+        if (lexer->lookahead != '@') {
+            return false;
+        }
+        advance(s, lexer);
+        if (lexer->lookahead != ')') {
+            return false;
+        }
+        advance(s, lexer);
+
+        uint8_t extra_indentation = 0;
+        while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            extra_indentation += advance(s, lexer);
+        }
+        bool line_end = lexer->lookahead == '\n' || lexer->lookahead == '\r';
+        bool dont_interrupt = false;
+        if (line_end) {
+            extra_indentation = 1;
+            dont_interrupt = true;
+        }
+        dont_interrupt = dont_interrupt && s->matched == s->open_blocks.size;
+        if (extra_indentation >= 1 &&
+            (dont_interrupt ? valid_symbols[LIST_MARKER_EXAMPLE_DONT_INTERRUPT]
+                            : valid_symbols[LIST_MARKER_EXAMPLE])) {
+            extra_indentation--;
+            if (extra_indentation <= 3) {
+                extra_indentation += s->indentation;
+                s->indentation = 0;
+            } else {
+                uint8_t temp = s->indentation;
+                s->indentation = extra_indentation;
+                extra_indentation = temp;
+            }
+            if (!can_push_block(s)) {
+                EMIT_ERROR;
+            }
+            // Use 3 as the indentation offset (length of "(@)")
+            push_block(s, (Block)(LIST_ITEM + extra_indentation + 3));
+            // No mark_end during this call: the token ends at the lexer.
+            note_line_content_start(s, lexer);
+            if (dont_interrupt) {
+                EMIT_TOKEN(LIST_MARKER_EXAMPLE_DONT_INTERRUPT);
+            } else {
+                EMIT_TOKEN(LIST_MARKER_EXAMPLE);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool parse_cite_suppress_author(Scanner *_, TSLexer *lexer,
+                                       const bool *valid_symbols) {
+    (void)(_);
+    if (lexer->lookahead == '@') {
+        lexer->advance(lexer, false);
+        if (lexer->lookahead == '{' && valid_symbols[CITE_SUPPRESS_AUTHOR_WITH_OPEN_BRACKET]) {
+            lexer->advance(lexer, false);
+            lexer->mark_end(lexer);
+            EMIT_TOKEN(CITE_SUPPRESS_AUTHOR_WITH_OPEN_BRACKET);
+        } else if (valid_symbols[CITE_SUPPRESS_AUTHOR]) {
+            lexer->mark_end(lexer);
+            EMIT_TOKEN(CITE_SUPPRESS_AUTHOR);
+        }
+    }
+    return false;
+}
+
+// ---- YAML metadata blocks (`---` ... `---`) --------------------------------
+//
+// A metadata block is four external tokens (grammar.js `minus_metadata`):
+// MINUS_METADATA_START (the opening `---` plus trailing blanks),
+// MINUS_METADATA_OPEN_NEWLINE (its line break), MINUS_METADATA_BODY (every
+// line up to, not including, the closing delimiter line — exposed in the tree
+// as the `yaml` node so consumers take the YAML's range from the parse;
+// bd-mjo6ao32 / GH #671) and MINUS_METADATA_END (the closing `---` plus
+// trailing blanks; the grammar consumes its line break like any other
+// block's). START is only emitted once a look-ahead has confirmed a closing
+// line exists — otherwise `---` is a thematic break — so that look-ahead runs
+// speculatively on the raw lexer after `mark_end` has been placed where the
+// thematic-break token would end. A closing delimiter is recognised only at
+// the start of a line, which is why a `---` inside a value never ends the
+// block.
+
+static void metadata_advance(Scanner *s, TSLexer *lexer, bool speculative) {
+    if (speculative) {
+        lexer->advance(lexer, false);
+    } else {
+        advance(s, lexer);
+    }
+}
+
+// Consume one line break (`\n`, `\r` or `\r\n`) if the lexer sits on one.
+static void metadata_consume_line_break(Scanner *s, TSLexer *lexer,
+                                        bool speculative) {
+    if (lexer->lookahead == '\r') {
+        metadata_advance(s, lexer, speculative);
+        if (lexer->lookahead == '\n') {
+            metadata_advance(s, lexer, speculative);
+        }
+    } else if (lexer->lookahead == '\n') {
+        metadata_advance(s, lexer, speculative);
+    }
+}
+
+// At the start of a line: is it a closing delimiter — exactly `---`, then
+// optional blanks, then a line break or EOF? Consumes the dashes and blanks
+// whether or not the line qualifies; on success the lexer sits on the line
+// break (or at EOF).
+static bool metadata_at_closing_line(Scanner *s, TSLexer *lexer,
+                                     bool speculative) {
+    size_t minus_count = 0;
+    while (lexer->lookahead == '-') {
+        minus_count++;
+        metadata_advance(s, lexer, speculative);
+    }
+    if (minus_count != 3) {
+        return false;
+    }
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+        metadata_advance(s, lexer, speculative);
+    }
+    return lexer->eof(lexer) || lexer->lookahead == '\n' ||
+           lexer->lookahead == '\r';
+}
+
+// From the start of a line, advance line by line until a closing delimiter
+// line is found; false at EOF. When not speculative, `mark_end` is placed at
+// the start of every line visited, so a token emitted on success ends exactly
+// where the closing line begins.
+static bool metadata_find_closing_line(Scanner *s, TSLexer *lexer,
+                                       bool speculative) {
+    for (;;) {
+        if (!speculative) {
+            mark_end(s, lexer);
+        }
+        if (metadata_at_closing_line(s, lexer, speculative)) {
+            return true;
+        }
+        while (!lexer->eof(lexer) && lexer->lookahead != '\n' &&
+               lexer->lookahead != '\r') {
+            metadata_advance(s, lexer, speculative);
+        }
+        if (lexer->eof(lexer)) {
+            return false;
+        }
+        metadata_consume_line_break(s, lexer, speculative);
+    }
+}
+
+// The tokens that can only occur inside an open metadata block. `scan` calls
+// this before any block-structure logic so the machinery that matches open
+// blocks at line starts never sees the body.
+static bool parse_minus_metadata_interior(Scanner *s, TSLexer *lexer,
+                                          const bool *valid_symbols) {
+    if (valid_symbols[MINUS_METADATA_OPEN_NEWLINE] &&
+        (lexer->lookahead == '\n' || lexer->lookahead == '\r')) {
+        metadata_consume_line_break(s, lexer, false);
+        s->column = 0;
+        mark_end(s, lexer);
+        EMIT_TOKEN(MINUS_METADATA_OPEN_NEWLINE);
+    }
+    if (valid_symbols[MINUS_METADATA_BODY]) {
+        if (metadata_find_closing_line(s, lexer, false)) {
+            // Zero-width when the closing line follows the opening one.
+            EMIT_TOKEN(MINUS_METADATA_BODY);
+        }
+        // Unterminated. Unreachable after a confirmed START, so only error
+        // recovery lands here; let the parser recover.
+        return false;
+    }
+    if (valid_symbols[MINUS_METADATA_END] &&
+        metadata_at_closing_line(s, lexer, false)) {
+        mark_end(s, lexer);
+        s->state &= (uint8_t)~STATE_IN_MINUS_METADATA;
+        EMIT_TOKEN(MINUS_METADATA_END);
+    }
+    return false;
+}
+
+static bool parse_minus(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    if (s->indentation <= 3 &&
+        (valid_symbols[LIST_MARKER_MINUS] ||
+         valid_symbols[LIST_MARKER_MINUS_DONT_INTERRUPT] ||
+         valid_symbols[THEMATIC_BREAK] ||
+         valid_symbols[CITE_SUPPRESS_AUTHOR_WITH_OPEN_BRACKET] || 
+         valid_symbols[MINUS_METADATA_START])) {
+        mark_end(s, lexer);
+        bool whitespace_after_minus = false;
+        bool minus_after_whitespace = false;
+        size_t minus_count = 0;
+        uint8_t extra_indentation = 0;
+
+        for (;;) {
+            if (lexer->lookahead == '-') {
+                if (minus_count == 1 && extra_indentation >= 1) {
+                    mark_end(s, lexer);
+                }
+                minus_count++;
+                advance(s, lexer);
+                minus_after_whitespace = whitespace_after_minus;
+            } else if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                if (minus_count == 1) {
+                    extra_indentation += advance(s, lexer);
+                } else {
+                    advance(s, lexer);
+                }
+                whitespace_after_minus = true;
+            } else {
+                break;
+            }
+        }
+        bool line_end = lexer->lookahead == '\n' || lexer->lookahead == '\r';
+        bool dont_interrupt = false;
+        if (minus_count == 1 && line_end) {
+            extra_indentation = 1;
+            dont_interrupt = true;
+        }
+        dont_interrupt = dont_interrupt && s->matched == s->open_blocks.size;
+        bool thematic_break = minus_count >= 3 && line_end;
+        bool list_marker_minus = minus_count >= 1 && extra_indentation >= 1;
+        bool maybe_thematic_break = false;
+        if (valid_symbols[THEMATIC_BREAK] && thematic_break) {
+            maybe_thematic_break = true;
+            mark_end(s, lexer);
+            s->indentation = 0;
+        } else if ((dont_interrupt
+                        ? valid_symbols[LIST_MARKER_MINUS_DONT_INTERRUPT]
+                        : valid_symbols[LIST_MARKER_MINUS]) &&
+                   list_marker_minus) {
+            if (minus_count == 1) {
+                mark_end(s, lexer);
+                note_line_content_start(s, lexer);
+            }
+            extra_indentation--;
+            if (extra_indentation <= 3) {
+                extra_indentation += s->indentation;
+                s->indentation = 0;
+            } else {
+                uint8_t temp = s->indentation;
+                s->indentation = extra_indentation;
+                extra_indentation = temp;
+            }
+            if (!can_push_block(s)) {
+                EMIT_ERROR;
+            }
+            push_block(s, (Block)(LIST_ITEM + extra_indentation));
+            if (dont_interrupt) {
+                EMIT_TOKEN(LIST_MARKER_MINUS_DONT_INTERRUPT);
+            } else {
+                EMIT_TOKEN(LIST_MARKER_MINUS);
+            }
+        }
+        if (minus_count == 3 && (!minus_after_whitespace) && line_end &&
+            valid_symbols[MINUS_METADATA_START]) {
+            // The token, if emitted, is the opening `---` plus trailing
+            // blanks: the same span a thematic break would take, so one
+            // mark serves both outcomes. Everything past it is speculative.
+            mark_end(s, lexer);
+            metadata_consume_line_break(s, lexer, true);
+            // `---` followed by a blank line is a thematic break, not the
+            // start of metadata.
+            bool blank_after_opening = lexer->eof(lexer) ||
+                lexer->lookahead == '\n' || lexer->lookahead == '\r';
+            if (!blank_after_opening &&
+                metadata_find_closing_line(s, lexer, true)) {
+                s->state |= STATE_IN_MINUS_METADATA;
+                EMIT_TOKEN(MINUS_METADATA_START);
+            }
+        } else if (minus_count == 1 && valid_symbols[CITE_SUPPRESS_AUTHOR_WITH_OPEN_BRACKET]) {
+            return parse_cite_suppress_author(s, lexer, valid_symbols);
+        }
+        if (maybe_thematic_break) {
+            EMIT_TOKEN(THEMATIC_BREAK);
+        }
+    }
+    return false;
+}
+
+// Decide whether the current line is a pipe-table header: a row with at
+// least one cell, followed by a delimiter row with the same number of
+// cells. The lexer may already be somewhere inside the first line's leading
+// content (parse_pipe_table_or_word_apostrophe enters here after reading
+// the first word); `starting_pipe` says whether the line began with `|`.
+// Pure look-ahead: never calls mark_end, so the caller's token end stands.
+static bool pipe_table_header_ahead(Scanner *s, TSLexer *lexer, bool starting_pipe) {
+    // count number of cells
+    size_t cell_count = 0;
+    // also remember if we see starting and ending pipes, as empty headers have
+    // to have both
+    bool ending_pipe = false;
+    bool empty = true;
+    while (lexer->lookahead != '\r' && lexer->lookahead != '\n' &&
+           !lexer->eof(lexer)) {
+        if (lexer->lookahead == '|') {
+            cell_count++;
+            ending_pipe = true;
+            advance(s, lexer);
+        } else {
+            if (lexer->lookahead != ' ' && lexer->lookahead != '\t') {
+                ending_pipe = false;
+            }
+            if (lexer->lookahead == '\\') {
+                advance(s, lexer);
+                if (is_punctuation((char)lexer->lookahead)) {
+                    advance(s, lexer);
+                }
+            } else {
+                advance(s, lexer);
+            }
+        }
+    }
+    if (empty && cell_count == 0 && !(starting_pipe && ending_pipe)) {
+        return false;
+    }
+    if (!ending_pipe) {
+        cell_count++;
+    }
+
+    // check the following line for a delimiter row
+    // parse a newline
+    if (lexer->lookahead == '\n') {
+        advance(s, lexer);
+    } else if (lexer->lookahead == '\r') {
+        advance(s, lexer);
+        if (lexer->lookahead == '\n') {
+            advance(s, lexer);
+        }
+    } else {
+        return false;
+    }
+    s->indentation = 0;
+    s->column = 0;
+    for (;;) {
+        if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            s->indentation += advance(s, lexer);
+        } else {
+            break;
+        }
+    }
+    // s->simulate = true;
+    // uint8_t matched_temp = 0;
+    // while (matched_temp < (uint8_t)s->open_blocks.size) {
+    //     if (match(s, lexer, s->open_blocks.items[matched_temp])) {
+    //         matched_temp++;
+    //     } else {
+    //         return false;
+    //     }
+    // }
+
+    // check if delimiter row has the same number of cells and at least one pipe
+    size_t delimiter_cell_count = 0;
+    if (lexer->lookahead == '|') {
+        advance(s, lexer);
+    }
+    for (;;) {
+        while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            advance(s, lexer);
+        }
+        if (lexer->lookahead == '|') {
+            delimiter_cell_count++;
+            advance(s, lexer);
+            continue;
+        }
+        if (lexer->lookahead == ':') {
+            advance(s, lexer);
+            if (lexer->lookahead != '-') {
+                return false;
+            }
+        }
+        bool had_one_minus = false;
+        while (lexer->lookahead == '-') {
+            had_one_minus = true;
+            advance(s, lexer);
+        }
+        if (had_one_minus) {
+            delimiter_cell_count++;
+        }
+        if (lexer->lookahead == ':') {
+            if (!had_one_minus) {
+                return false;
+            }
+            advance(s, lexer);
+        }
+        while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            advance(s, lexer);
+        }
+        if (lexer->lookahead == '|') {
+            if (!had_one_minus) {
+                delimiter_cell_count++;
+            }
+            advance(s, lexer);
+            continue;
+        }
+        if (lexer->lookahead != '\r' && lexer->lookahead != '\n') {
+            return false;
+        } else {
+            break;
+        }
+    }
+    // if the cell counts are not equal then this is not a table
+    return cell_count == delimiter_cell_count;
+}
+
+static bool parse_pipe_table(Scanner *s, TSLexer *lexer,
+                             const bool *valid_symbols) {
+
+    // unused
+    (void)(valid_symbols);
+
+    // PIPE_TABLE_START is zero width
+    mark_end(s, lexer);
+    bool starting_pipe = false;
+    if (lexer->lookahead == '|') {
+        starting_pipe = true;
+        advance(s, lexer);
+    }
+    if (pipe_table_header_ahead(s, lexer, starting_pipe)) {
+        EMIT_TOKEN(PIPE_TABLE_START);
+    }
+    return false;
+}
+
+// GH #943: an apostrophe directly after a word is an apostrophe, not a
+// quote opener. Pandoc never opens a single quote right after a string
+// (`notAfterString` in Text.Pandoc.Parsing), and it closes one only inside
+// an open single-quoted span. So outside such a span, `Dogs' toys`,
+// `the cats'.`, `d'`Arrow`` and `Cats'` at end of block are each a Str that
+// ends in `'` (smart typography later makes it U+2019), not the Q-2-7 /
+// Q-2-10 errors they used to be.
+//
+// The scanner cannot look behind, so the decision is made from the START of
+// the word: the scanner is consulted at every token boundary, and at a word
+// it reads ahead to see whether the word is immediately followed by a `'`
+// that is not itself followed by a letter or digit (that form, `it's`, is
+// already one pandoc_str: see PANDOC_REGEX_STR). When it is, the whole
+// `word'` is emitted as one LITERAL_STR; otherwise the scanner returns
+// false and the internal lexer lexes the word as it always did.
+//
+// "Outside a single-quoted span" comes from the scanner's own count of
+// open spans (Scanner.single_quote_depth), so `'Dogs' toys'` still closes
+// at the first `'`. The parse state alone is not enough: SINGLE_QUOTE_CLOSE
+// is valid only where the span's content may end, and that excludes the
+// position right after a space, where `'Hello world'` would otherwise lose
+// its closer to this rule. No grammar ambiguity is involved: the choice is
+// made here, deterministically, and the grammar keeps its no-`conflicts`
+// invariant.
+//
+// The word recognised below is an ASCII subset of what PANDOC_REGEX_STR
+// lexes as one pandoc_str: letters and digits, `-`, `.`, and `_` or `'`
+// when followed by a letter or digit. It must never extend FURTHER than the
+// regex would (that would move a token boundary); when it stops earlier
+// (`foo@bar'`, `café'`, `foo_'`) it simply does not match, and the `'`
+// keeps today's behaviour. A `'` followed by a non-ASCII code point is
+// treated as possibly word-internal (`l'été`) and also does not match.
+static bool is_ascii_alnum(int32_t chr) {
+    return is_ascii_alpha(chr) || (chr >= '0' && chr <= '9');
+}
+
+// Reads a word that starts at the lexer (first character must be an ASCII
+// letter; the caller checks). Returns true when the word is immediately
+// followed by a `'` that is not followed by a letter or digit; the lexer is
+// then just past that `'`, and nothing has been mark_end'ed. Returns false
+// otherwise, with the lexer inside or just past the word.
+static bool scan_word_then_apostrophe(TSLexer *lexer) {
+    for (;;) {
+        int32_t chr = lexer->lookahead;
+        if (is_ascii_alnum(chr) || chr == '-' || chr == '.') {
+            lexer->advance(lexer, false);
+            continue;
+        }
+        if (chr == '_' || chr == '\'') {
+            lexer->advance(lexer, false);
+            int32_t next = lexer->lookahead;
+            if (is_ascii_alnum(next) || next >= 0x80) {
+                // Word-internal (`foo_bar`, `it's`); for a non-ASCII code
+                // point the loop stops on it next and reports no match.
+                continue;
+            }
+            return chr == '\'';
+        }
+        return false;
+    }
+}
+
+static bool word_apostrophe_candidate(Scanner *s, TSLexer *lexer,
+                                      const bool *valid_symbols) {
+    return valid_symbols[LITERAL_STR] &&
+           s->single_quote_depth == 0 &&
+           !valid_symbols[LANGUAGE_SPECIFIER] &&
+           !valid_symbols[KEY_SPECIFIER] &&
+           !valid_symbols[NAKED_VALUE_SPECIFIER] &&
+           is_ascii_alpha(lexer->lookahead);
+}
+
+// Inline position (PIPE_TABLE_START not valid): emit `word'` as one
+// LITERAL_STR, or let the internal lexer have the word.
+static bool parse_word_apostrophe(TSLexer *lexer, const bool *valid_symbols) {
+    (void)(valid_symbols);
+    if (!scan_word_then_apostrophe(lexer)) {
+        return false;
+    }
+    lexer->mark_end(lexer);
+    EMIT_TOKEN(LITERAL_STR);
+}
+
+// Block start (PIPE_TABLE_START valid), lookahead is a letter. Two tokens
+// compete here and need different ends: a zero-width PIPE_TABLE_START at
+// the first character if the line is a table header, or LITERAL_STR
+// covering `word'` if the first word ends in an apostrophe. Telling a
+// header apart needs the whole line and the next one, and a token's end
+// cannot be moved back once the scanner has read past it, so the two
+// cannot be decided in one scan call. Instead: read the word, run the
+// header check from there, and
+//   - if it is a table, emit PIPE_TABLE_START as before (the next scan
+//     call, inside the first cell, handles the word);
+//   - if it is not and the word ends in an apostrophe, emit the zero-width
+//     PARAGRAPH_START so the next scan call is inside `pandoc_paragraph`,
+//     where PIPE_TABLE_START is no longer valid and parse_word_apostrophe
+//     emits the word;
+//   - otherwise return false, exactly as parse_pipe_table did.
+// A table header line parses as before: the header check sees the same
+// line, entered after its first word instead of at its start.
+static bool parse_pipe_table_or_word_apostrophe(Scanner *s, TSLexer *lexer,
+                                                const bool *valid_symbols) {
+    // Both tokens end here. Remember the mid-line position state too: the
+    // header check crosses into the next line and resets it, and a
+    // PARAGRAPH_START must carry the state of the position it ends at.
+    mark_end(s, lexer);
+    uint8_t indentation = s->indentation;
+    uint8_t column = s->column;
+
+    bool apostrophe = scan_word_then_apostrophe(lexer);
+    // The line began with a letter, so there is no starting pipe, and the
+    // word read so far is content of the first cell.
+    if (pipe_table_header_ahead(s, lexer, false)) {
+        EMIT_TOKEN(PIPE_TABLE_START);
+    }
+    if (apostrophe && valid_symbols[PARAGRAPH_START]) {
+        s->indentation = indentation;
+        s->column = column;
+        // No note_line_content_start: the token after this one is always
+        // the word itself, never a construct that consults the anchor.
+        EMIT_TOKEN(PARAGRAPH_START);
+    }
+    return false;
+}
+
+// parse_open_square_brace has already advanced the '['
+static bool parse_ref_id_specifier(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(valid_symbols);
+    (void)(s);
+    
+    if (lexer->lookahead != '^') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    // https://pandoc.org/MANUAL.html#extension-footnotes
+    // The identifiers in footnote references may not contain spaces, tabs, newlines, 
+    // or the characters ^, [, or ].
+    while (lexer->lookahead != ' ' && lexer->lookahead != '\t' && lexer->lookahead != '\n' &&
+           lexer->lookahead != '^' && lexer->lookahead != '['  && lexer->lookahead != ']') {
+        lexer->advance(lexer, false);
+    }
+    if (lexer->lookahead != ']') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if (lexer->lookahead == ':' && valid_symbols[REF_ID_SPECIFIER]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(REF_ID_SPECIFIER);
+    }
+    if (!valid_symbols[INLINE_NOTE_REFERENCE]) {
+        return false;
+    }
+    lexer->mark_end(lexer);
+    EMIT_TOKEN(INLINE_NOTE_REFERENCE);
+}
+
+static bool parse_fenced_div_note_id(Scanner *s, TSLexer *lexer,
+                                      const bool *valid_symbols) {
+    // unused
+    (void)(valid_symbols);
+
+    // precondition: lexer->lookahead == '^'
+    advance(s, lexer);
+
+    // https://pandoc.org/MANUAL.html#extension-footnotes
+    // The identifiers in footnote references may not contain spaces, tabs, newlines,
+    // or the characters ^, [, or ].
+    //
+    // The EOF check is load-bearing: at EOF `lookahead` is 0 and
+    // `advance` is a no-op, so without it `::: ^id` as the last bytes of
+    // a document loops forever. '\r' ends the id so CRLF input does not
+    // leak the carriage return into it.
+    while (!lexer->eof(lexer) &&
+           lexer->lookahead != ' ' && lexer->lookahead != '\t' &&
+           lexer->lookahead != '\n' && lexer->lookahead != '\r' &&
+           lexer->lookahead != '^' && lexer->lookahead != '['  && lexer->lookahead != ']') {
+        advance(s, lexer);
+    }
+    lexer->mark_end(lexer);
+    EMIT_TOKEN(FENCED_DIV_NOTE_ID);
+}
+
+// Parse code span delimiters for inline code spans (and pipe table cells).
+// Dispatched from the main inline scanner at the '`' case (around
+// scanner.c:2374) whenever CODE_SPAN_START / CODE_SPAN_CLOSE is valid.
+// The CODE_SPAN_START look-ahead lives in code_span_close_exists_ahead
+// and is shared with parse_fenced_code_block (start-of-paragraph path).
+static bool parse_code_span(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // Count backticks
+    uint8_t level = 0;
+    while (lexer->lookahead == '`') {
+        lexer->advance(lexer, false);
+        level++;
+    }
+    mark_end(s, lexer);
+
+    // Try to close an open code span
+    if (level == s->code_span_delimiter_length && valid_symbols[CODE_SPAN_CLOSE]) {
+        s->code_span_delimiter_length = 0;
+        EMIT_TOKEN(CODE_SPAN_CLOSE);
+    }
+
+    // bd-nycn85a8: inside an open span, a run whose length differs from the
+    // delimiter is content. Emit the whole run as one hidden token so the
+    // internal lexer never splits it into single backticks; before this, a
+    // split run left a trailing single backtick that then matched a
+    // 1-backtick delimiter as the closer. Gated on CODE_SPAN_CLOSE being
+    // valid too, so error recovery (where every symbol is valid) cannot
+    // emit it with a stale delimiter length.
+    if (valid_symbols[CODE_SPAN_BACKTICK_RUN] && valid_symbols[CODE_SPAN_CLOSE] &&
+        s->code_span_delimiter_length > 0 &&
+        level != s->code_span_delimiter_length) {
+        EMIT_TOKEN(CODE_SPAN_BACKTICK_RUN);
+    }
+
+    // Try to open a new code span by looking ahead for a matching closing delimiter.
+    if (valid_symbols[CODE_SPAN_START] &&
+        code_span_close_exists_ahead(lexer, level)) {
+        s->code_span_delimiter_length = level;
+        EMIT_TOKEN(CODE_SPAN_START);
+    }
+
+    return false;
+}
+
+// Parse latex span delimiters for pipe table cells
+// This is similar to parse_code_span but for dollar signs
+static bool parse_latex_span(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // Count dollar signs
+    uint8_t level = 0;
+    while (lexer->lookahead == '$') {
+        lexer->advance(lexer, false);
+        level++;
+    }
+    mark_end(s, lexer);
+
+    // Try to close an open latex span
+    if (level == s->latex_span_delimiter_length && valid_symbols[LATEX_SPAN_CLOSE]) {
+        s->latex_span_delimiter_length = 0;
+        EMIT_TOKEN(LATEX_SPAN_CLOSE);
+    }
+
+    // Try to open a new latex span by looking ahead for a matching closing delimiter
+    if (valid_symbols[LATEX_SPAN_START]) {
+        size_t close_level = 0;
+        // Look ahead within the same line to find a closing delimiter
+        while (!lexer->eof(lexer) && lexer->lookahead != '\n' && lexer->lookahead != '\r') {
+            if (lexer->lookahead == '$') {
+                close_level++;
+            } else {
+                if (close_level == level) {
+                    // Found a matching delimiter
+                    break;
+                }
+                close_level = 0;
+            }
+            lexer->advance(lexer, false);
+        }
+
+        if (close_level == level) {
+            // Found matching closing delimiter
+            s->latex_span_delimiter_length = level;
+            EMIT_TOKEN(LATEX_SPAN_START);
+        }
+    }
+
+    return false;
+}
+
+// Parse HTML comment: <!-- ... -->
+// This must consume everything from <!-- to --> atomically, including
+// newlines and what would otherwise be block markers (lists, headings, etc.)
+// This is critical for handling comments that span block boundaries.
+// parse_html_comment is called from parse_open_angle_brace, which has already consumed '<'
+static bool parse_html_comment(TSLexer *lexer, const bool *valid_symbols) {
+    if (!valid_symbols[HTML_COMMENT]) {
+        return false;
+    }
+
+    if (lexer->lookahead != '!') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    if (lexer->lookahead != '-') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    if (lexer->lookahead != '-') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    // Now consume everything until we find '-->'
+    // This includes newlines, list markers, heading markers, etc.
+    while (!lexer->eof(lexer)) {
+        if (lexer->lookahead == '-') {
+            lexer->advance(lexer, false);
+            if (lexer->lookahead == '-') {
+                lexer->advance(lexer, false);
+                if (lexer->lookahead == '>') {
+                    lexer->advance(lexer, false);
+                    lexer->mark_end(lexer);
+                    EMIT_TOKEN(HTML_COMMENT);
+                }
+                // Not the end, continue consuming
+            }
+            // Continue consuming
+        } else {
+            lexer->advance(lexer, false);
+        }
+    }
+
+    // Unclosed comment - consumed until EOF
+    lexer->mark_end(lexer);
+    EMIT_TOKEN(HTML_COMMENT);
+}
+
+static bool parse_open_angle_brace(TSLexer *lexer, const bool *valid_symbols) {
+    bool lt_str_valid = valid_symbols[LITERAL_STR];
+    if (!valid_symbols[AUTOLINK] && !valid_symbols[RAW_SPECIFIER] &&
+        !valid_symbols[HTML_COMMENT] && !lt_str_valid) {
+        return false;
+    }
+
+    // Current position should be '<'
+    if (lexer->lookahead != '<') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    // bd-j9cf: fix the fallback end-of-token at exactly one byte past '<'.
+    // Subsequent advances are lookahead until the next mark_end call. If the
+    // scan loop below walks to EOF without finding a closing delimiter, we
+    // fall back to emitting LITERAL_STR, which consumes only the '<'.
+    lexer->mark_end(lexer);
+
+    if (lexer->lookahead == '!') {
+        if (valid_symbols[HTML_COMMENT]) {
+            return parse_html_comment(lexer, valid_symbols);
+        }
+        // HTML_COMMENT was not requested here; treat '<' as a Str literal
+        // if the grammar allows it.
+        if (lt_str_valid) {
+            EMIT_TOKEN(LITERAL_STR);
+        }
+        return false;
+    }
+
+    // bd-ly83qewg: whitespace (or EOF) immediately after '<' disqualifies
+    // every angle-bracket HTML construct — per HTML/CommonMark, a tag name
+    // (or '/', '!', '?') must immediately follow '<' — and autolinks, which
+    // admit no whitespace at all. Only a raw specifier ('{<reader}') scans
+    // past this point, so when that isn't a valid symbol either, bail out
+    // right away instead of walking to the next '>'/EOF.
+    bool html_possible = !(lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+                           lexer->lookahead == '\r' || lexer->lookahead == '\n' ||
+                           lexer->eof(lexer));
+
+    // bd-html-element-runaway-k1eo50h8 (rule A): an HTML tag begins with a
+    // tag name, which starts with an ASCII letter, or with '/' (closing tag)
+    // or '?' (processing instruction); '!' was dispatched above. qmd's
+    // '<#id>' anchor shorthand (bd-p2tx) rides on the same token, so '#' is
+    // admitted too. Anything else after '<' — a digit, '-', '=', '(' … —
+    // can never begin a tag, so '<6.1', '<-', '<=b' are literal text, as in
+    // pandoc. Only HTML_ELEMENT is gated on this: a CommonMark email
+    // autolink may begin with a digit ('<1user@example.com>'), so autolinks
+    // keep their own predicate below.
+    bool tag_possible = html_possible &&
+                        (is_ascii_alpha(lexer->lookahead) || lexer->lookahead == '/' ||
+                         lexer->lookahead == '?' || lexer->lookahead == '#');
+
+    // Very first character can't be '/' in autolinks; whitespace/EOF right
+    // after '<' disqualifies them like every other construct.
+    bool could_be_autolink = html_possible && lexer->lookahead != '/';
+
+    // Fast path: nothing can start here. Emit the literal '<' without
+    // scanning ahead (bd-ly83qewg; also avoids an O(n) walk per '<').
+    if (!tag_possible && !could_be_autolink && !valid_symbols[RAW_SPECIFIER]) {
+        if (lt_str_valid) {
+            EMIT_TOKEN(LITERAL_STR);
+        }
+        return false;
+    }
+
+    // consume all characters until one of:
+    // - '}': that was a raw specifier
+    // - '>': that was an autolink or html_element (unless disqualified by
+    //   the predicates above)
+    // - a blank line (rule B, below) or EOF: no HTML construct matched; emit
+    //   LITERAL_STR (bd-j9cf) so the bare '<' becomes a plain Str instead of
+    //   a parse error.
+
+    bool had_url_like_character = false;
+    // bd-email-autolink-dropped-2jj38iiv: '@' qualifies the token as a
+    // candidate email autolink (over-approximation — a real HTML open tag
+    // with attributes contains whitespace, which falsifies
+    // could_be_autolink, and a bare tag name cannot contain '@'). Precise
+    // CommonMark email validation happens in pampa's autolink processing;
+    // non-email content falls back there to the raw-HTML treatment it got
+    // when it lexed as HTML_ELEMENT.
+    bool had_at_sign = false;
+    while (!lexer->eof(lexer)) {
+        if (lexer->lookahead == ':' || lexer->lookahead == '%') {
+            had_url_like_character = true;
+        } else if (lexer->lookahead == '@') {
+            had_at_sign = true;
+        } else if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            could_be_autolink = false;
+        } else if (lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+            // bd-html-element-runaway-k1eo50h8 (rule B): every token this
+            // function can emit is an inline, and no inline survives a
+            // paragraph boundary. A tag may span a newline
+            // ('<div\n  class="x">', bd-ly83qewg) but not a blank line:
+            // stop scanning there and fall through to LITERAL_STR. Without
+            // this bound an unclosed '<foo' ran to the next '>' anywhere in
+            // the file — a pipe-table cell six lines down, in the reported
+            // case — and the resulting parse errors pointed there.
+            bool was_cr = lexer->lookahead == '\r';
+            lexer->advance(lexer, false);
+            if (was_cr && lexer->lookahead == '\n') {
+                lexer->advance(lexer, false);
+            }
+            while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                lexer->advance(lexer, false);
+            }
+            if (lexer->lookahead == '\n' || lexer->lookahead == '\r' || lexer->eof(lexer)) {
+                break;
+            }
+            continue; // the line ending has already been consumed
+        } else if (valid_symbols[RAW_SPECIFIER] && lexer->lookahead == '}') {
+            lexer->mark_end(lexer);
+            EMIT_TOKEN(RAW_SPECIFIER);
+        } else if (lexer->lookahead == '>') {
+            if (valid_symbols[AUTOLINK] && could_be_autolink &&
+                (had_url_like_character || had_at_sign)) {
+                lexer->advance(lexer, false); // we want to consume '>' for autolinks
+                lexer->mark_end(lexer);
+                EMIT_TOKEN(AUTOLINK);
+            }
+            if (tag_possible) {
+                // Best-effort tag: pampa turns it into a RawInline/RawBlock
+                // with a Q-2-9 warning, or the <#id> anchor Link.
+                lexer->advance(lexer, false);
+                lexer->mark_end(lexer);
+                EMIT_TOKEN(HTML_ELEMENT);
+            }
+            // This '>' closed nothing, and neither can a later one: an
+            // autolink cannot contain '>', and a tag was ruled out at the
+            // first character.
+            if (!valid_symbols[RAW_SPECIFIER]) {
+                break;
+            }
+        }
+        // Once the autolink reading is gone too, only a raw specifier could
+        // still be found; otherwise there is nothing left to scan for.
+        if (!tag_possible && !could_be_autolink && !valid_symbols[RAW_SPECIFIER]) {
+            break;
+        }
+        lexer->advance(lexer, false);
+    }
+
+    // Reached a blank line or EOF without finding a closing delimiter. If
+    // the grammar permits a bare '<' as a Str literal here, emit LITERAL_STR
+    // — mark_end is still at '<'+1, so only the '<' character is consumed.
+    if (lt_str_valid) {
+        EMIT_TOKEN(LITERAL_STR);
+    }
+    return false;
+}
+
+static bool parse_raw_specifier(TSLexer *lexer, const bool *valid_symbols) {
+    if (!valid_symbols[RAW_SPECIFIER]) {
+        return false;
+    }
+    // Current position should be '='
+    if (lexer->lookahead != '=') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    // consume all characters until one of:
+    // - '}': that was a raw specifier
+    // - ' ', '\t', EOF: that was a bad lex
+
+    while (!lexer->eof(lexer) && lexer->lookahead != ' ' && lexer->lookahead != '\t') {
+        if (valid_symbols[RAW_SPECIFIER] && lexer->lookahead == '}') {
+            lexer->mark_end(lexer);
+            EMIT_TOKEN(RAW_SPECIFIER);
+        }
+        lexer->advance(lexer, false);
+    }
+    return false;
+
+}
+
+static bool parse_language_specifier(TSLexer *lexer, const bool *valid_symbols) {
+    if (!valid_symbols[LANGUAGE_SPECIFIER] && 
+        !valid_symbols[KEY_SPECIFIER] && 
+        !valid_symbols[NAKED_VALUE_SPECIFIER]) {
+        return false;
+    }
+    // Current position should be 'A-Za-z'
+    if (!((lexer->lookahead >= 'A' && lexer->lookahead <= 'Z') ||
+          (lexer->lookahead >= 'a' && lexer->lookahead <= 'z')) &&
+        !(valid_symbols[NAKED_VALUE_SPECIFIER] && 
+          (lexer->lookahead >= '0' && lexer->lookahead <= '9'))) {
+        return false;
+    }
+    lexer->advance(lexer, false);
+
+    // consume all alphanumeric characters until one of:
+    // - '}', EOF: that was a language specifier
+    // - '=': that was a key-value key
+    // - ' ', '\t': look ahead of whitespace to peek for an '=' to make the call
+    //
+    // ':' is a word character, as in pandoc's attribute keys
+    // (`html:style="..."`, GH #1027).
+
+    do {
+        if (
+            (lexer->lookahead >= 'A' && lexer->lookahead <= 'Z') ||
+            (lexer->lookahead >= 'a' && lexer->lookahead <= 'z') ||
+            (lexer->lookahead >= '0' && lexer->lookahead <= '9') ||
+            (lexer->lookahead == '_') ||
+            (lexer->lookahead == '%') ||
+            (lexer->lookahead == '.') ||
+            (lexer->lookahead == ':') ||
+            (lexer->lookahead == '-')
+        ) {
+            lexer->advance(lexer, false);
+            continue;
+        }
+        if (lexer->lookahead == '}') {
+            lexer->mark_end(lexer);
+            if (valid_symbols[NAKED_VALUE_SPECIFIER]) {
+                EMIT_TOKEN(NAKED_VALUE_SPECIFIER);
+            } else {
+                EMIT_TOKEN(LANGUAGE_SPECIFIER);
+            }
+        }
+        if (lexer->lookahead == '=') {
+            lexer->mark_end(lexer);
+            EMIT_TOKEN(KEY_SPECIFIER);
+        }
+        if ((lexer->lookahead == ' ') || (lexer->lookahead == '\t')) {
+            lexer->mark_end(lexer);
+            while (!lexer->eof(lexer) && ((lexer->lookahead == ' ') || (lexer->lookahead == '\t'))) {
+                lexer->advance(lexer, false);
+            }
+            if (lexer->eof(lexer)) {
+                EMIT_TOKEN(LANGUAGE_SPECIFIER);
+            }
+            if (lexer->lookahead == '=') {
+                EMIT_TOKEN(KEY_SPECIFIER);
+            }
+            if (valid_symbols[NAKED_VALUE_SPECIFIER]) {
+                EMIT_TOKEN(NAKED_VALUE_SPECIFIER);
+            } 
+            EMIT_TOKEN(LANGUAGE_SPECIFIER);
+        }
+        return false;
+    } while (!lexer->eof(lexer));
+    EMIT_TOKEN(LANGUAGE_SPECIFIER);
+}
+
+static bool parse_open_square_brace(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    if (lexer->lookahead != '[') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    
+    if ((valid_symbols[REF_ID_SPECIFIER] || valid_symbols[INLINE_NOTE_REFERENCE]) && lexer->lookahead == '^') {
+        return parse_ref_id_specifier(s, lexer, valid_symbols);
+    }
+
+    if (valid_symbols[HIGHLIGHT_SPAN_START] && lexer->lookahead == '!') {
+        lexer->advance(lexer, false);
+        if (lexer->lookahead != '!') {
+            return false;
+        }
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
+            lexer->advance(lexer, false);
+        }
+        EMIT_TOKEN(HIGHLIGHT_SPAN_START);
+    }
+
+    if (valid_symbols[INSERT_SPAN_START] && lexer->lookahead == '+') {
+        lexer->advance(lexer, false);
+        if (lexer->lookahead != '+') {
+            return false;
+        }
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
+            lexer->advance(lexer, false);
+        }
+        EMIT_TOKEN(INSERT_SPAN_START);
+    }
+
+    if (valid_symbols[DELETE_SPAN_START] && lexer->lookahead == '-') {
+        lexer->advance(lexer, false);
+        if (lexer->lookahead != '-') {
+            return false;
+        }
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
+            lexer->advance(lexer, false);
+        }
+        EMIT_TOKEN(DELETE_SPAN_START);
+    }
+
+    if (valid_symbols[COMMENT_SPAN_START] && lexer->lookahead == '>') {
+        lexer->advance(lexer, false);
+        if (lexer->lookahead != '>') {
+            return false;
+        }
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        while (!lexer->eof(lexer) && (lexer->lookahead == ' ' || lexer->lookahead == '\t')) {
+            lexer->advance(lexer, false);
+        }
+        EMIT_TOKEN(COMMENT_SPAN_START);
+    }
+
+    
+    return false;   
+}
+
+// A `'` is one of three things.
+//
+// bd-apostrophe-after-span-6l9c8c26: directly after the end of an inline
+// construct it is an apostrophe (`_book_'s`, `[book](url)'s`, `` `a.rs`'s ``,
+// `_books_' premises`), as in Pandoc. "Directly after an inline construct"
+// is not something the scanner can see: it cannot look behind, and closers
+// such as the `)` of a link or the `}` of an attribute are lexed by the
+// internal lexer. The grammar supplies it instead: SPAN_APOSTROPHE is a
+// valid symbol only in the parse states that follow a `_closable_inline`
+// (grammar.js, `_inline_element`). Three more conditions apply:
+//   - no single-quoted span is open (Scanner.single_quote_depth, the same
+//     count GH #943 uses): inside one, `'_book_'`, the mark is the closer;
+//   - no whitespace was skipped on the way here. scan() consumes leading
+//     whitespace before dispatching, so without this `_a_ 'quoted'` would
+//     reach this branch in the state right after the emphasis closer;
+//   - not error recovery, where every symbol is valid and the parse state
+//     says nothing. TRIGGER_ERROR is used by no grammar rule, so it is
+//     valid only then.
+// The token is the `'` alone. What follows is lexed as usual and pampa
+// merges the adjacent Strs (`'s` becomes one Str). In particular a word
+// that follows and itself ends in `'` is picked up by the GH #943 rule, so
+// `_a_'b'` reads as Pandoc reads it, `’b’`, not as a stray opener.
+//
+// Otherwise it is a quote mark: a closer if the grammar allows one here,
+// else an opener.
+static bool parse_single_quote(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    if (lexer->lookahead != '\'') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if (valid_symbols[SPAN_APOSTROPHE] && !valid_symbols[TRIGGER_ERROR] &&
+        s->single_quote_depth == 0 && s->ws_before_token == 0) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(SPAN_APOSTROPHE);
+    }
+    // prioritize close over open so 'word' works as expected.
+    if (valid_symbols[SINGLE_QUOTE_CLOSE]) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(SINGLE_QUOTE_CLOSE);
+    }
+    if (valid_symbols[SINGLE_QUOTE_OPEN]) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(SINGLE_QUOTE_OPEN);
+    }
+    return false;
+}
+
+static bool parse_double_quote(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(s);
+
+    if (lexer->lookahead != '"') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    // prioritize close over open so 'word' works as expected.
+    if (valid_symbols[DOUBLE_QUOTE_CLOSE]) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(DOUBLE_QUOTE_CLOSE);
+    }
+    if (valid_symbols[DOUBLE_QUOTE_OPEN]) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(DOUBLE_QUOTE_OPEN);
+    }
+    return false;
+}
+
+static bool parse_shortcode_close(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(s);
+
+    if (lexer->lookahead != '>') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if (!valid_symbols[SHORTCODE_CLOSE] && !valid_symbols[SHORTCODE_CLOSE_ESCAPED]) {
+        return false;
+    }
+    if (lexer->eof(lexer) || lexer->lookahead != '}') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if (lexer->eof(lexer) || lexer->lookahead != '}') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if (!lexer->eof(lexer) && lexer->lookahead == '}' && valid_symbols[SHORTCODE_CLOSE_ESCAPED]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(SHORTCODE_CLOSE_ESCAPED);
+    }
+    if (!valid_symbols[SHORTCODE_CLOSE]) {
+        return false;
+    }
+    lexer->mark_end(lexer);
+    EMIT_TOKEN(SHORTCODE_CLOSE);
+}
+
+static bool parse_shortcode_open(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(s);
+
+    if (lexer->lookahead != '{') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if ((!valid_symbols[SHORTCODE_OPEN] && 
+         !valid_symbols[SHORTCODE_OPEN_ESCAPED]) || 
+         lexer->eof(lexer) || 
+         lexer->lookahead != '{') {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    if (!lexer->eof(lexer) && lexer->lookahead == '<' && valid_symbols[SHORTCODE_OPEN]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(SHORTCODE_OPEN);
+    }
+
+    if (lexer->eof(lexer) || lexer->lookahead != '{' || !valid_symbols[SHORTCODE_OPEN_ESCAPED]) {
+        return false;
+    }
+
+    lexer->advance(lexer, false);
+    if (lexer->eof(lexer) || lexer->lookahead != '<' || !valid_symbols[SHORTCODE_OPEN]) {
+        return false;
+    }
+    lexer->advance(lexer, false);
+    lexer->mark_end(lexer);
+    EMIT_TOKEN(SHORTCODE_OPEN_ESCAPED);
+}
+
+// ---------------------------------------------------------------------------
+// Bare `@` (bd-bare-at-literal-w3ytmu8e).
+//
+// An `@` used to be a citation start unconditionally, so any `@` without a
+// key after it (`main @ sha`, `a @`) failed the document with an uncoded
+// parse error. Pandoc reads every such `@` as text, but q2 deliberately
+// does not follow it all the way: an `@` next to citation-like punctuation
+// (`@-foo`, `@,`, `(see @)`, `-@`, `@@`, `@}`) is far more likely a
+// mistyped citation than prose, and guessing would let the typo reach the
+// output. So an `@` is literal text only when it cannot be read as a
+// citation attempt:
+//
+// - standalone: preceded by whitespace or line start AND followed by
+//   whitespace, EOL or EOF (`a @ b`), or directly by a straight or curly
+//   quote (`a @"x"`, `a @“x”`). That shape is decided here and emitted as LITERAL_STR (the bd-j9cf
+//   token, folded into `pandoc_str` by the grammar);
+// - inside or at the end of a word (`user@example.com`, `word@`): the
+//   scanner cannot see the character before the `@`, so this is decided
+//   by the lexer instead — PANDOC_REGEX_STR in grammar.js lets an `@`
+//   continue a word after an alphanumeric, and the word is lexed before
+//   the scanner ever sees its `@`.
+//
+// Every other `@` keeps emitting the citation delimiter; when no key
+// follows, the grammar reports the missing key as an error.
+
+// Straight and curly quotation marks: " ' “ ” ‘ ’
+static bool is_quote_mark(int32_t chr) {
+    return chr == '"' || chr == '\'' || chr == 0x201C || chr == 0x201D ||
+           chr == 0x2018 || chr == 0x2019;
+}
+
+static bool parse_cite_author_in_text(Scanner *s, TSLexer *lexer,
+                                      const bool *valid_symbols) {
+    // Must be computed before advancing past the `@`.
+    bool preceded_by_ws = at_ws_or_line_content_start(s, lexer);
+    lexer->advance(lexer, false);
+    if (lexer->lookahead == '{' && valid_symbols[CITE_AUTHOR_IN_TEXT_WITH_OPEN_BRACKET]) {
+        lexer->advance(lexer, false);
+        // We have an opening bracket, so we can parse the author in text with
+        // brackets.
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(CITE_AUTHOR_IN_TEXT_WITH_OPEN_BRACKET);
+    }
+    // A key never starts with whitespace or a quote, so this cannot steal
+    // a citation. Curly quotes count like straight ones (`a @“x”`).
+    bool standalone = preceded_by_ws &&
+        (at_ws_or_eol(lexer) || is_quote_mark(lexer->lookahead));
+    if (standalone && valid_symbols[LITERAL_STR]) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(LITERAL_STR);
+    }
+    if (valid_symbols[CITE_AUTHOR_IN_TEXT]) {
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(CITE_AUTHOR_IN_TEXT);
+    }
+    return false;
+}
+
+static bool parse_tilde(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(s);
+
+    lexer->advance(lexer, false);
+    lexer->mark_end(lexer);
+    if (lexer->lookahead == '~' && valid_symbols[STRIKEOUT_CLOSE]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(STRIKEOUT_CLOSE);
+    }
+    if (lexer->lookahead == '~' && valid_symbols[STRIKEOUT_OPEN]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(STRIKEOUT_OPEN);
+    }
+    if (valid_symbols[SUBSCRIPT_CLOSE]) {
+        EMIT_TOKEN(SUBSCRIPT_CLOSE);
+    }
+    // bd-whitespace-flanked-delimiters-0ncy8bgq: Pandoc's markdown reader
+    // (what Quarto 1 uses) only opens a subscript when the closing `~`
+    // comes before any whitespace; otherwise `~5 and ~10` is literal.
+    if (valid_symbols[SUBSCRIPT_OPEN] && closer_before_ws(lexer, '~')) {
+        EMIT_TOKEN(SUBSCRIPT_OPEN);
+    }
+    if (valid_symbols[LITERAL_STR]) {
+        EMIT_TOKEN(LITERAL_STR);
+    }
+    return false;
+}
+
+// Fenced-div sigils: the token right after `::: ` that turns a fenced
+// div opener into a different construct (`::: ^id` is a note
+// definition; `::: ++`, `::: --`, `::: >>` and `::: !!` are block-level
+// editorial marks). The parser makes a sigil token valid only in the state
+// that follows `$._fenced_div_start $._whitespace`, which is where
+// `pandoc_div` expects its info string or attribute specifier; see
+// `fencedDivTail` in grammar.js for the part these constructs share.
+//
+// To add a construct: add an external token, a case below, and a rule
+// in grammar.js that consumes the token after `$._fenced_div_start
+// $._whitespace`.
+static bool any_fenced_div_sigil_valid(const bool *valid_symbols) {
+    return valid_symbols[FENCED_DIV_NOTE_ID] ||
+           valid_symbols[FENCED_DIV_INSERT_MARKER] ||
+           valid_symbols[FENCED_DIV_DELETE_MARKER] ||
+           valid_symbols[FENCED_DIV_EDIT_COMMENT_MARKER] ||
+           valid_symbols[FENCED_DIV_HIGHLIGHT_MARKER];
+}
+
+// A block-level editorial marker is its character doubled (`++`, `--`,
+// `>>`, `!!`, as in the inline `[++ ...]` forms) followed by whitespace,
+// a line ending, EOF, or the `{` of an attribute specifier (as `:::{.x}`
+// is for plain divs). Anything else (`::: --foo`, `::: ---`, `::: -->`)
+// is not a marker; returning false hands the position back to the
+// internal lexer.
+static bool parse_fenced_div_editorial_marker(Scanner *s, TSLexer *lexer,
+                                              TokenType token) {
+    int32_t c = lexer->lookahead;
+    advance(s, lexer);
+    if (lexer->lookahead != c) {
+        return false;
+    }
+    advance(s, lexer);
+    if (!lexer->eof(lexer) &&
+        lexer->lookahead != ' ' && lexer->lookahead != '\t' &&
+        lexer->lookahead != '\n' && lexer->lookahead != '\r' &&
+        lexer->lookahead != '{') {
+        return false;
+    }
+    mark_end(s, lexer);
+    EMIT_TOKEN(token);
+}
+
+static bool parse_fenced_div_sigil(Scanner *s, TSLexer *lexer,
+                                   const bool *valid_symbols) {
+    switch (lexer->lookahead) {
+        case '^':
+            if (valid_symbols[FENCED_DIV_NOTE_ID]) {
+                return parse_fenced_div_note_id(s, lexer, valid_symbols);
+            }
+            break;
+        case '+':
+            if (valid_symbols[FENCED_DIV_INSERT_MARKER]) {
+                return parse_fenced_div_editorial_marker(s, lexer, FENCED_DIV_INSERT_MARKER);
+            }
+            break;
+        case '-':
+            if (valid_symbols[FENCED_DIV_DELETE_MARKER]) {
+                return parse_fenced_div_editorial_marker(s, lexer, FENCED_DIV_DELETE_MARKER);
+            }
+            break;
+        case '>':
+            if (valid_symbols[FENCED_DIV_EDIT_COMMENT_MARKER]) {
+                return parse_fenced_div_editorial_marker(s, lexer, FENCED_DIV_EDIT_COMMENT_MARKER);
+            }
+            break;
+        case '!':
+            if (valid_symbols[FENCED_DIV_HIGHLIGHT_MARKER]) {
+                return parse_fenced_div_editorial_marker(s, lexer, FENCED_DIV_HIGHLIGHT_MARKER);
+            }
+            break;
+    }
+    return false;
+}
+
+static bool parse_caret(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(s);
+
+    lexer->advance(lexer, false);
+    lexer->mark_end(lexer);
+    if (lexer->lookahead == '[' && valid_symbols[INLINE_NOTE_START_TOKEN]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(INLINE_NOTE_START_TOKEN);
+
+    }
+    if (valid_symbols[SUPERSCRIPT_CLOSE]) {
+        EMIT_TOKEN(SUPERSCRIPT_CLOSE);
+    }
+    // Same rule as subscripts in parse_tilde: `x ^2 and y ^3` is literal.
+    if (valid_symbols[SUPERSCRIPT_OPEN] && closer_before_ws(lexer, '^')) {
+        EMIT_TOKEN(SUPERSCRIPT_OPEN);
+    }
+    if (valid_symbols[LITERAL_STR]) {
+        EMIT_TOKEN(LITERAL_STR);
+    }
+    return false;
+}
+
+static bool parse_line_break(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    // unused
+    (void)(s);
+    (void)(valid_symbols);
+    
+    // we've seen \, so now we need to decide if it's an escaped character or a line break
+
+    lexer->advance(lexer, false);
+    if (lexer->eof(lexer) || lexer->lookahead == '\r' || lexer->lookahead == '\n') {
+        // do not eat the newline (to allow blocks to end), but emit line break
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(PANDOC_LINE_BREAK);
+    }
+    // we've advanced the lexer, so we can no longer try to match other tokens.
+    // return control to internal lexer
+    return false;
+}
+
+static int match_line(Scanner *s, TSLexer *lexer) {
+    // DEBUG_PRINT("in match_line\n");
+    // DEBUG_EXP("%d", (int)s->indentation);
+    // DEBUG_EXP("%d", (int)s->open_blocks.size);
+    bool might_be_soft_break = !(s->state & STATE_INSIDE_ATX);
+    bool partial_success = false;
+    while (s->matched < (uint8_t)s->open_blocks.size) {
+        if (s->matched == (uint8_t)s->open_blocks.size - 1 &&
+            (s->state & STATE_CLOSE_BLOCK)) {
+            if (!partial_success) {
+                DEBUG_PRINT("unset STATE_CLOSE_BLOCK\n");
+                s->state &= ~STATE_CLOSE_BLOCK;
+            }
+            break;
+        }
+        int result = match(s, lexer, s->open_blocks.items[s->matched]);
+        DEBUG_EXP("%d", result);
+        switch (result) {
+            case 0:
+                if (s->state & STATE_WAS_SOFT_LINE_BREAK) {
+                    DEBUG_PRINT("unset STATE_MATCHING\n");
+                    s->state &= (~STATE_MATCHING);
+                }
+                DEBUG_EXP("%d", partial_success);
+                return partial_success | (might_be_soft_break << 1);
+            case 1:
+                partial_success = true;
+                s->matched++;
+                break;
+            case 2:
+                might_be_soft_break = false;
+                advance(s, lexer);
+                s->matched = 0;
+                partial_success = false;
+                break;
+        }
+    }
+    DEBUG_EXP("%d", partial_success);
+    DEBUG_EXP("%d", might_be_soft_break);
+    return partial_success | (might_be_soft_break << 1);
+}
+
+static bool scan(Scanner *s, TSLexer *lexer, const bool *valid_symbols) {
+    s->ws_before_token = 0;
+    #ifdef SCAN_DEBUG
+    DEBUG_PRINT("-- scan() state=%d\n", s->state);
+    DEBUG_PRINT("   matching: %s\n", (s->state & STATE_MATCHING) ? "true": "false");
+    DEBUG_LOOKAHEAD;
+    print_valid_symbols(valid_symbols);
+    #endif
+
+    // Inside a YAML metadata block only the block's own tokens can occur;
+    // handle them before any block-structure logic runs.
+    if ((s->state & STATE_IN_MINUS_METADATA) &&
+        (valid_symbols[MINUS_METADATA_OPEN_NEWLINE] ||
+         valid_symbols[MINUS_METADATA_BODY] ||
+         valid_symbols[MINUS_METADATA_END])) {
+        return parse_minus_metadata_interior(s, lexer, valid_symbols);
+    }
+
+    // A normal tree-sitter rule decided that the current branch is invalid and
+    // now "requests" an error to stop the branch
+    // if (valid_symbols[TRIGGER_ERROR]) {
+    //     EMIT_ERROR;
+    // }
+
+    // Close the inner most block after the next line break as requested. See
+    // `$._close_block` in grammar.js
+    if (valid_symbols[CLOSE_BLOCK]) {
+        s->state |= STATE_CLOSE_BLOCK;
+        EMIT_TOKEN(CLOSE_BLOCK);
+    }
+
+    // if we are at the end of the file and there are still open blocks close
+    // them all
+    if (lexer->eof(lexer)) {
+        if (valid_symbols[TOKEN_EOF]) {
+            EMIT_TOKEN(TOKEN_EOF);
+        }
+        if (s->open_blocks.size > 0) {
+            DEBUG_PRINT("EOF block close\n");
+            // if (!s->simulate)
+                pop_block(s);
+            EMIT_TOKEN(BLOCK_CLOSE);
+        }
+        return false;
+    }
+
+    // bd-vet6: when we re-enter STATE_MATCHING after a SOFT_LINE_ENDING
+    // and the current lookahead is the trailing \n / \r of the same
+    // logical line, do NOT call match_line here. The LIST_ITEM match()
+    // returns case 2 on \n (see line ~537) and advances past it; the
+    // line-ending gate at line ~2233 then has nothing to match against
+    // and scan() returns false. The state changes get rolled back, but
+    // tree-sitter retries with another lex_external state and emits
+    // CLOSE_BLOCK, which the parser cannot shift in this position.
+    // Bypassing match_line here lets the line-ending gate run and emit
+    // the LINE_ENDING / SOFT_LINE_ENDING the parser actually expects.
+    // (EOF is handled above at line ~2027 and never reaches here.)
+    bool at_soft_break_line_end =
+        (s->state & STATE_MATCHING) &&
+        (s->state & STATE_WAS_SOFT_LINE_BREAK) &&
+        (lexer->lookahead == '\n' || lexer->lookahead == '\r');
+
+    if ((s->state & STATE_MATCHING) && !at_soft_break_line_end) { // we are in the state of trying to match all currently open blocks
+        DEBUG_PRINT("scan() while STATE_MATCHING\n");
+        int match_line_return = match_line(s, lexer);
+        // bool might_be_soft_break = match_line_return & 2;
+        bool partial_success = match_line_return & 1;
+        // bool all_will_be_matched = s->matched == s->open_blocks.size;
+        DEBUG_EXP("%d", match_line_return);
+        DEBUG_EXP("%d", (int) partial_success);
+        // DEBUG_EXP("%d", (int) all_will_be_matched);
+        DEBUG_EXP("%d", s->matched);
+        DEBUG_LOOKAHEAD;
+        
+        if (partial_success) {
+            DEBUG_PRINT("in partial_success\n");
+            DEBUG_EXP("%d", s->matched);
+            DEBUG_EXP("%zu", s->open_blocks.size);
+
+            if (s->matched == s->open_blocks.size) {
+                DEBUG_PRINT("unset STATE_MATCHING\n");
+                s->state &= (~STATE_MATCHING);
+            }
+            DEBUG_PRINT("STATE_WAS_SOFT_LINE_BREAK: %s\n", (s->state & STATE_WAS_SOFT_LINE_BREAK) ? "true": "false");
+            // match_line never calls mark_end: the token ends at the lexer.
+            note_line_content_start(s, lexer);
+            EMIT_TOKEN(BLOCK_CONTINUATION);
+        }
+
+        if (!(s->state & STATE_WAS_SOFT_LINE_BREAK)) {
+            DEBUG_PRINT("STATE_WAS_SOFT_LINE_BREAK: %s\n", (s->state & STATE_WAS_SOFT_LINE_BREAK) ? "true": "false");
+            DEBUG_PRINT("BLOCK_CLOSE in matching\n");
+            pop_block(s);
+            if (s->matched == s->open_blocks.size) {
+                s->state &= (~STATE_MATCHING);
+            }
+            EMIT_TOKEN(BLOCK_CLOSE);
+        }
+
+        DEBUG_PRINT("scan while STATE_MATCHING fallthrough\n");
+    }
+
+    // Parse any preceeding whitespace and remember its length. This makes a
+    // lot of parsing quite a bit easier. Also record how many characters we
+    // consumed on this call (ws_before_token) for the inline flanking rules.
+    for (;;) {
+        if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+            s->indentation += advance(s, lexer);
+            if (s->ws_before_token < UINT8_MAX) s->ws_before_token++;
+        } else {
+            break;
+        }
+    }
+
+    // Q-2-59: QMD does not support 4-space indented code blocks. If we are at
+    // a true block-start position (signalled by ATX_H1_MARKER or
+    // BLANK_LINE_START being valid — both indicate the parser is willing to
+    // begin a fresh block here) and the leftover indentation after container
+    // matchers (block-quote, list-item) is >= 4, emit a token no rule
+    // consumes so the parser raises Q-2-59. Skip blank lines (lookahead is
+    // the line terminator) — those are handled by the BLANK_LINE_START case
+    // in the switch below.
+    //
+    // Container-continuation guard (issue #196). The original gate (PR #194)
+    // fired whenever ATX_H1_MARKER or BLANK_LINE_START was valid, on the
+    // theory that those signals alone identified a true block-start
+    // position. That undershoots: inside an open list-item, the parser
+    // accepts a fresh block start *and* expects a continuation indent on
+    // the same scan call. If the whitespace loop above consumed what was
+    // actually the list-item continuation indent — for instance because
+    // STATE_MATCHING was not set on this call (preceding blank line carried
+    // trailing whitespace ≥ list_item_indentation, exercising a path that
+    // skips match_line) — `s->indentation >= 4` reflects the *continuation*
+    // indent, not extra indent layered on top of it.
+    //
+    // The reliable discriminator from a trace of the misfire vs. the
+    // intended Q-2-59 cases is `valid_symbols[BLOCK_CONTINUATION] &&
+    // s->open_blocks.size > 0`. With at least one open container *and*
+    // BLOCK_CONTINUATION valid, the parser still owes the line a
+    // continuation absorption — the indent has not yet been confirmed as
+    // "extra". Q-2-59 should defer in that case. When open_blocks is empty
+    // (genuine top-level indented block) or BLOCK_CONTINUATION is invalid
+    // (in-list indent has already been absorbed and the leftover is true
+    // extra indent), the gate still fires as intended.
+    //
+    // Lazy paragraph continuations and multi-line shortcodes are filtered
+    // out higher up by ATX_H1_MARKER / BLANK_LINE_START being invalid in
+    // their parser states. The new guard layers on top of that, not in
+    // place of it. Same emission pattern as TRIPLE_STAR (Q-2-32); see
+    // grammar.js (`_indented_code_block_error`).
+    if (s->indentation >= 4 &&
+        (valid_symbols[ATX_H1_MARKER] || valid_symbols[BLANK_LINE_START]) &&
+        !(valid_symbols[BLOCK_CONTINUATION] && s->open_blocks.size > 0) &&
+        lexer->lookahead != '\n' && lexer->lookahead != '\r') {
+        mark_end(s, lexer);
+        EMIT_TOKEN(INDENTED_CODE_BLOCK_DISALLOWED);
+    }
+
+    // Right after `::: ` only a fenced-div sigil or pandoc_div's info
+    // string / attribute specifier (both internal-lexer tokens) can
+    // follow: in the generated parse table the sigil tokens share a
+    // scanner state with no other external token (apart from the
+    // all-valid error-recovery state, which returns CLOSE_BLOCK above).
+    // So a sigil is decided here, before the main switch would route
+    // '^' to superscripts, and a failed sigil scan hands the position
+    // to the internal lexer.
+    if (any_fenced_div_sigil_valid(valid_symbols)) {
+        return parse_fenced_div_sigil(s, lexer, valid_symbols);
+    }
+
+    // Decide which tokens to consider based on the first non-whitespace
+    // character
+    DEBUG_PRINT("before main lookahead switch\n");
+
+    switch (lexer->lookahead) {
+        case '<':
+            // Handle HTML comments, raw_specifiers (qmd's raw reader extension),
+            // autolinks, and (bd-j9cf) bare '<' as Str literal.
+            if (valid_symbols[HTML_COMMENT] ||
+                valid_symbols[AUTOLINK] ||
+                valid_symbols[RAW_SPECIFIER] ||
+                valid_symbols[LITERAL_STR]) {
+                return parse_open_angle_brace(lexer, valid_symbols);
+            }
+            break;
+        case '\r':
+        case '\n':
+            if (valid_symbols[BLANK_LINE_START]) {
+                // A blank line token is 0 width. Do not consume characters
+                EMIT_TOKEN(BLANK_LINE_START);
+            }
+            break;
+        case '$':
+            if (valid_symbols[LATEX_SPAN_START] || valid_symbols[LATEX_SPAN_CLOSE]) {
+                return parse_latex_span(s, lexer, valid_symbols);
+            }
+            break;
+        case ':':
+            return parse_fenced_div_marker(s, lexer, valid_symbols);
+        case '`':
+            // Handle code spans for pipe table cells
+            if (!valid_symbols[FENCED_CODE_BLOCK_START_BACKTICK] && (
+                valid_symbols[CODE_SPAN_START] || valid_symbols[CODE_SPAN_CLOSE])) {
+                DEBUG_PRINT("Trying to scan a code span\n");
+                return parse_code_span(s, lexer, valid_symbols);
+            } else {
+                DEBUG_PRINT("Trying to parse fenced code block\n");
+                return parse_fenced_code_block(s, '`', lexer, valid_symbols);
+            }
+        case '~':
+            // A tilde could be strikeout or subscript.
+            return parse_tilde(s, lexer, valid_symbols);
+        case '*':
+            // A star could either mark a list item or a thematic break.
+            // This code is similar to the code for '_' and '+'.
+            return parse_star(s, lexer, valid_symbols);
+        case '_':
+            return parse_thematic_break_underscore(s, lexer, valid_symbols);
+        case '>':
+            // A '>' could mark the closing of shortcodes or the beginning of a block quote 
+            if (valid_symbols[SHORTCODE_CLOSE] || valid_symbols[SHORTCODE_CLOSE_ESCAPED]) {
+                return parse_shortcode_close(s, lexer, valid_symbols);
+            } else {
+                return parse_block_quote(s, lexer, valid_symbols);
+            }
+        case '#':
+            // A '#' could mark a atx heading
+            return parse_atx_heading(s, lexer, valid_symbols);
+        case '=':
+            if (valid_symbols[RAW_SPECIFIER]) {
+                DEBUG_PRINT("Attempting to lex RAW_SPECIFIER\n");
+                return parse_raw_specifier(lexer, valid_symbols);
+            }
+            break;
+        case '+':
+            // A '+' could be a list marker
+            return parse_plus(s, lexer, valid_symbols);
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+            DEBUG_HERE;
+            // A number could be a list marker (if followed by a dot or a
+            // parenthesis)
+
+            if (!valid_symbols[NAKED_VALUE_SPECIFIER]) {
+                return parse_ordered_list_marker(s, lexer, valid_symbols);
+            }
+            break;
+        case '-':
+            // A minus could mark a list marker, a thematic break,
+            // or a cite_suppress_author
+            return parse_minus(s, lexer, valid_symbols);
+        case '[':
+            if (valid_symbols[HIGHLIGHT_SPAN_START] || 
+                valid_symbols[INSERT_SPAN_START] || 
+                valid_symbols[DELETE_SPAN_START] || 
+                valid_symbols[COMMENT_SPAN_START] || 
+                valid_symbols[INLINE_NOTE_REFERENCE] ||
+                valid_symbols[REF_ID_SPECIFIER]) {
+                return parse_open_square_brace(s, lexer, valid_symbols);
+            }
+            break;
+        case '^':
+            if (valid_symbols[SUPERSCRIPT_CLOSE] || valid_symbols[SUPERSCRIPT_OPEN]) {
+                return parse_caret(s, lexer, valid_symbols);
+            }
+            break;
+        case '(':
+            // A '(' could be an example list marker (@)
+            return parse_example_list_marker(s, lexer, valid_symbols);
+        case '\'':
+            return parse_single_quote(s, lexer, valid_symbols);
+        case '"':
+            return parse_double_quote(s, lexer, valid_symbols);
+        case '{':
+            if (valid_symbols[SHORTCODE_OPEN] || valid_symbols[SHORTCODE_OPEN_ESCAPED]) {
+                return parse_shortcode_open(s, lexer, valid_symbols);
+            }
+            break;
+        case '@':
+            return parse_cite_author_in_text(s, lexer, valid_symbols);
+        case '\\':
+            if (valid_symbols[PANDOC_LINE_BREAK]) {
+                return parse_line_break(s, lexer, valid_symbols);
+            }
+    }
+    DEBUG_HERE;
+    if (lexer->lookahead == '|' && valid_symbols[PIPE_TABLE_DELIMITER]) {
+        lexer->advance(lexer, false);
+        lexer->mark_end(lexer);
+        EMIT_TOKEN(PIPE_TABLE_DELIMITER);
+    }
+    if (lexer->lookahead != '\r' && lexer->lookahead != '\n' &&
+        valid_symbols[PIPE_TABLE_START]) {
+        if (word_apostrophe_candidate(s, lexer, valid_symbols)) {
+            return parse_pipe_table_or_word_apostrophe(s, lexer, valid_symbols);
+        }
+        return parse_pipe_table(s, lexer, valid_symbols);
+    }
+    if ((valid_symbols[LANGUAGE_SPECIFIER] || 
+            valid_symbols[KEY_SPECIFIER] || 
+            valid_symbols[NAKED_VALUE_SPECIFIER]) &&  
+        ((lexer->lookahead >= 'A' && lexer->lookahead <= 'Z') ||
+            (lexer->lookahead >= 'a' && lexer->lookahead <= 'z'))) {
+        DEBUG_HERE;
+        return parse_language_specifier(lexer, valid_symbols);
+    }
+    DEBUG_HERE;
+    if (valid_symbols[NAKED_VALUE_SPECIFIER] && (lexer->lookahead >= '0' && lexer->lookahead <= '9')) {
+        DEBUG_HERE;
+        return parse_language_specifier(lexer, valid_symbols);
+    }
+    // GH #943: a word followed by an apostrophe, in inline content.
+    if (word_apostrophe_candidate(s, lexer, valid_symbols)) {
+        return parse_word_apostrophe(lexer, valid_symbols);
+    }
+
+    // The parser just encountered a line break. Setup the state correspondingly
+    if ((valid_symbols[LINE_ENDING] || valid_symbols[SOFT_LINE_ENDING] ||
+         valid_symbols[PIPE_TABLE_LINE_ENDING]) &&
+        (lexer->lookahead == '\n' || lexer->lookahead == '\r')) {
+        DEBUG_PRINT("Starting to process line break\n");
+        if (lexer->lookahead == '\r') {
+            advance(s, lexer);
+            if (lexer->lookahead == '\n') {
+                advance(s, lexer);
+            }
+        } else {
+            advance(s, lexer);
+        }
+        s->indentation = 0;
+        s->column = 0;
+        if (!(s->state & STATE_CLOSE_BLOCK) &&
+            (valid_symbols[SOFT_LINE_ENDING] ||
+             valid_symbols[PIPE_TABLE_LINE_ENDING])) {
+            DEBUG_PRINT("will mark lexer end\n");
+            lexer->mark_end(lexer);
+            for (;;) {
+                if (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    s->indentation += advance(s, lexer);
+                } else {
+                    break;
+                }
+            }
+
+            // Issue #206: a `:::` line that follows a pipe-table row must
+            // terminate the table rather than be absorbed as another row. The
+            // _caption_start scanner gate (in parse_fenced_div_marker, level
+            // == 1 branch) prevents the parser from shifting `:` as caption,
+            // but the pipe_table_row rule's "single cell, no `|`" alternative
+            // will otherwise eat `:::` as cell content (3 × pandoc_str).
+            //
+            // To avoid that, peek (without mark_end) for a `:::` run. If we
+            // see one, fall through to the LINE_ENDING path below so the
+            // pipe_table terminates via its `choice(_newline, _eof)` tail.
+            // The parser then proceeds to a state where FENCED_DIV_END is
+            // valid and parse_fenced_div_marker can emit it on the next scan
+            // call — for bare `:::` outside a fenced div, FENCED_DIV_END is
+            // not valid and the line errors out at a sensible place rather
+            // than silently producing a phantom row.
+            bool next_line_is_fenced_div_marker = false;
+            // Whether the peek below consumed a colon run, and whether that
+            // run opens a block. Both soft-break gates need these because the
+            // peek advances the lexer: after it, `lexer->lookahead` is the
+            // character AFTER the colons, so the gates' own `!= ':'` tests
+            // can no longer see that the line started with one (bd-div-attr-
+            // no-space-ne0fudkw).
+            bool peeked_colon_run = false;
+            bool colon_run_opens_block = false;
+            if (lexer->lookahead == ':') {
+                peeked_colon_run = true;
+                int level = 0;
+                // Match parse_fenced_div_marker's unbounded colon-run count.
+                // pandoc allows arbitrary fence widths for nested divs.
+                while (lexer->lookahead == ':') {
+                    advance(s, lexer);
+                    level++;
+                }
+                bool followed_by_ws_or_eol = (lexer->eof(lexer) ||
+                                              lexer->lookahead == ' ' ||
+                                              lexer->lookahead == '\t' ||
+                                              lexer->lookahead == '\n' ||
+                                              lexer->lookahead == '\r');
+                // A run of three or more colons is a fenced-div marker
+                // whatever follows it: `:::{.foo}`, `:::foo` and `::: foo`
+                // are all div openers (pandoc and Quarto 1 accept all three),
+                // and a bare `:::` is a closer. Requiring whitespace here
+                // used to make the tight forms invisible to the gates below.
+                if (level >= 3) {
+                    next_line_is_fenced_div_marker = true;
+                }
+                // The colon run opens a block when it is a fenced-div marker
+                // or a caption start (`: caption`, matched by
+                // parse_fenced_div_marker's level == 1 branch). Anything else
+                // — `::`, or a single `:` glued to a word — is ordinary text
+                // and must stay inside the paragraph.
+                colon_run_opens_block =
+                    next_line_is_fenced_div_marker ||
+                    (level == 1 && followed_by_ws_or_eol);
+                // No mark_end past the peeked colons: tree-sitter rewinds to
+                // the last mark_end (set at line 2341, post-newline /
+                // pre-indent) between scan calls, so the advance is undone
+                // for the LINE_ENDING fall-through path. Same idiom used by
+                // the backtick / asterisk peeks below.
+            }
+
+            if (lexer->lookahead != '\n' && lexer->lookahead != '\r' &&
+                !next_line_is_fenced_div_marker &&
+                valid_symbols[PIPE_TABLE_LINE_ENDING]) {
+                EMIT_TOKEN(PIPE_TABLE_LINE_ENDING);
+            }
+            if (((lexer->lookahead == '\n' || lexer->lookahead == '\r') ||
+                 next_line_is_fenced_div_marker) &&
+                valid_symbols[PIPE_TABLE_LINE_ENDING]) {
+                EMIT_TOKEN(LINE_ENDING);
+            }
+
+            // bd-af1e: only 3+ consecutive backticks open a fenced code
+            // block (CommonMark); fewer is an inline code span and should
+            // soft-break. Peek-count up to 3 backticks. We do NOT mark_end
+            // during the peek: tree-sitter rewinds to the last mark_end
+            // (set at line 2247, pre-indent) between scan calls, so the
+            // advance is undone for the LINE_ENDING fall-through path.
+            //
+            // bd-1xph: similarly, '*' at line start only interrupts a
+            // paragraph in two contexts:
+            //   - level==1 followed by whitespace: list marker
+            //   - level>=3 followed by whitespace/eol: thematic break
+            // Otherwise it opens an inline emphasis ('*emph*'), strong
+            // ('**strong**'), or strong+emph ('***both***') and should
+            // soft-break. Same peek-without-mark_end pattern as backticks.
+            //
+            // bd-w6tod0gh: the digit, '-' and '+' branches used to be blanket
+            // character-class exclusions, with no peek. That split any
+            // paragraph whose continuation line merely started with one of
+            // them ("...leases last\n30 minutes...", "-5 degrees"), and was
+            // fatal when the wrap fell inside link text. They now peek like
+            // '*' does — see peek_ordered_marker_interrupts /
+            // peek_dash_plus_opens_block.
+            int32_t first_lookahead = lexer->lookahead;
+            bool first_starts_with_fence = false;
+            bool first_starts_with_star_block = false;
+            // Gate 1 asks "could this open a block?"; gate 2 asks "does it
+            // interrupt this paragraph?". They differ only for ordered
+            // markers — see OrderedMarkerPeek.
+            bool first_starts_with_marker_block = false;
+            bool first_marker_interrupts = false;
+            // Set when the line's first character is ':' and the colon run
+            // opens a block. Both gates test this instead of comparing
+            // first_lookahead against ':', because the colon peek above has
+            // already advanced past the run.
+            bool first_starts_with_colon_block = false;
+            bool first_peeked = false;
+            if (peeked_colon_run) {
+                // Restore the line's real first character for the gates, and
+                // take the PEEKED emission path so the mark_end below cannot
+                // absorb the colon run into the SOFT_LINE_ENDING token. That
+                // absorption is how `:::{.foo}` after a paragraph used to
+                // vanish from the tree entirely, opening line and all.
+                first_lookahead = ':';
+                first_starts_with_colon_block = colon_run_opens_block;
+                first_peeked = true;
+            } else if (lexer->lookahead == '`') {
+                int level = 0;
+                while (lexer->lookahead == '`' && level < 3) {
+                    advance(s, lexer);
+                    level++;
+                }
+                first_starts_with_fence = (level >= 3);
+                first_peeked = true;
+            } else if (lexer->lookahead == '-' || lexer->lookahead == '+') {
+                // CommonMark: a marker more than 3 columns past the
+                // innermost list content column cannot form (the line
+                // standing alone would be indented code, which cannot
+                // interrupt a paragraph) — the line is lazy paragraph
+                // continuation, so leave the block flags false. The
+                // over-indent verdict must still take the PEEKED
+                // emission path (first_peeked = true even though
+                // nothing was consumed): skipping mark_end leaves the
+                // indentation for the next scan, where either
+                // match_line claims it or the grammar's
+                // soft-break-trailing _whitespace absorbs it. The
+                // absorbing (non-peeked) emission is NOT equivalent —
+                // swallowing the next line's indent into
+                // SOFT_LINE_ENDING keeps a bogus paragraph-
+                // continuation GLR fork alive across whitespace-only
+                // lines (attributed-div-ws-blank-list repro).
+                if (s->indentation <= claimable_list_indentation(s) + 3) {
+                    // Bullets carry no interruption restriction, so both
+                    // gates get the same answer.
+                    first_starts_with_marker_block =
+                        peek_dash_plus_opens_block(s, lexer);
+                    first_marker_interrupts = first_starts_with_marker_block;
+                }
+                first_peeked = true;
+            } else if (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
+                // Same over-indentation rule and emission-path rule as
+                // the dash/plus branch.
+                if (s->indentation <= claimable_list_indentation(s) + 3) {
+                    OrderedMarkerPeek peek = peek_ordered_marker(s, lexer);
+                    first_starts_with_marker_block = peek.well_formed;
+                    first_marker_interrupts = peek.may_interrupt;
+                }
+                first_peeked = true;
+            } else if (lexer->lookahead == '[') {
+                // bd-miif1k1z: '[^id]: body' is the block form of a
+                // footnote definition (inline_ref_def) and interrupts an
+                // open paragraph the way '#' and '-' do. Without this,
+                // two definitions on consecutive lines parsed as one --
+                // the second was absorbed as lazy continuation into the
+                // first note's body and its reference rendered as an
+                // empty span.
+                //
+                // Same over-indentation rule as the dash/plus branch
+                // above. Footnote definitions carry no CommonMark-style
+                // interruption restriction (unlike ordered markers), so
+                // both gates get the same answer.
+                //
+                // NOTE this makes '[^id]:' interrupt an ORDINARY
+                // paragraph too, not just a definition body:
+                //
+                //     hello there.
+                //     [^b]: two.
+                //
+                // is a paragraph plus a definition in qmd, where pandoc
+                // keeps one paragraph with literal '[^b]:' text (pandoc's
+                // note body is a raw-line collector that stops at the
+                // next definition, so a definition never interrupts
+                // ordinary prose there). This divergence is DELIBERATE:
+                // q2's note body is an ordinary paragraph, so '#' and '-'
+                // already interrupt it where pandoc absorbs them as
+                // literal text. Scoping this to definition bodies only
+                // would need the scanner to know it is inside an
+                // inline_ref_def, which is a grammar rule, not an open
+                // block -- state the scanner does not have.
+                if (s->indentation <= claimable_list_indentation(s) + 3) {
+                    first_starts_with_marker_block =
+                        peek_ref_id_specifier(s, lexer);
+                    first_marker_interrupts = first_starts_with_marker_block;
+                    // Only inside the guard: unlike the dash/plus branch,
+                    // the over-indent verdict here does NOT need the
+                    // peeked emission path. When over-indented we never
+                    // advance, so leaving first_peeked false reproduces
+                    // byte for byte what this line did before '[' had a
+                    // branch at all -- which is the behavior the
+                    // over-indented list-item corpus case pins. Hoisting
+                    // this out of the guard "for symmetry" makes the soft
+                    // break swallow the block continuation.
+                    first_peeked = true;
+                }
+            } else if (lexer->lookahead == '*') {
+                int level = 0;
+                while (lexer->lookahead == '*') {
+                    advance(s, lexer);
+                    level++;
+                }
+                bool trailing_ws_or_eol = (lexer->lookahead == ' ' ||
+                                           lexer->lookahead == '\t' ||
+                                           lexer->lookahead == '\n' ||
+                                           lexer->lookahead == '\r' ||
+                                           lexer->eof(lexer));
+                // bd-star-as-str-qigl02pz: a `*` alone on the line (EOL/EOF right
+                // after it) is an EMPTY list item. CommonMark lets it start a sibling
+                // item inside an open list, but not interrupt a top-level paragraph:
+                // there the line is a continuation and the star lexes as a literal
+                // Str (`para\n*` = Para [para, SoftBreak, "*"]).
+                bool trailing_ws = lexer->lookahead == ' ' || lexer->lookahead == '\t';
+                if (level == 1 && (trailing_ws || (trailing_ws_or_eol && any_list_item_open(s)))) {
+                    first_starts_with_star_block = true;  // list marker
+                } else if (level >= 3 && trailing_ws_or_eol) {
+                    first_starts_with_star_block = true;  // thematic break
+                }
+                first_peeked = true;
+            }
+
+            // bd-ilv8p: when we're inside an open inline code span,
+            // pandoc absorbs all content (including characters that
+            // would otherwise interrupt a paragraph — heading markers,
+            // list markers, fence delimiters, etc.) as literal text up
+            // to the matching close. The code_span_close_exists_ahead
+            // look-ahead at CODE_SPAN_START already established that a
+            // close exists within the paragraph, so we want the soft-
+            // break to always go through here and let the grammar's
+            // _soft_line_break consume the line ending.
+            //
+            // Exception: when first_lookahead is `>`, defer to match_line
+            // + the second gate so the block-quote prefix is folded into
+            // the SOFT_LINE_ENDING token range (otherwise the `> ` would
+            // be left between the soft-break and the next text segment,
+            // and the content extractor would pick it up as literal
+            // backtick text). The second-gate bypass below handles the
+            // post-match_line side of this.
+            bool inside_code_span =
+                (s->code_span_delimiter_length > 0) &&
+                valid_symbols[SOFT_LINE_ENDING] &&
+                !(s->state & STATE_CLOSE_BLOCK) &&
+                first_lookahead != '>';
+            if (inside_code_span ||
+                ((!(s->state & STATE_INSIDE_ATX)) &&
+                 (first_lookahead != '*' || !first_starts_with_star_block) &&
+                 !first_starts_with_marker_block &&
+                 first_lookahead != '>' &&
+                 !first_starts_with_colon_block && first_lookahead != '#' &&
+                 !first_starts_with_fence &&
+                 first_lookahead > ' ')) {
+                s->state |= STATE_WAS_SOFT_LINE_BREAK;
+                if (first_peeked || inside_code_span) {
+                    // Peek-advanced past indent + delimiter run (or this
+                    // is the code-span bypass): leave SOFT_LINE_ENDING's
+                    // token range at pre-indent (mark_end from line 2511,
+                    // immediately after the line feed). Set STATE_MATCHING
+                    // so any continuation indent / block prefix is emitted
+                    // as block_continuation on the next scan via match_line.
+                    //
+                    // For the code-span path (bd-ilv8p) this is critical:
+                    // a regular paragraph's continuation-line leading
+                    // whitespace would normally be folded into the soft
+                    // break, but pandoc preserves that whitespace as
+                    // content inside a code span. Skipping the
+                    // mark_end-at-post-indent here keeps the leading
+                    // whitespace as input to the next scan (where it
+                    // either becomes block_continuation via match_line
+                    // when an open block claims it, or is consumed as
+                    // text by the code-span content rule).
+                    s->matched = 0;
+                    s->indentation = 0;
+                    if (s->open_blocks.size > 0) {
+                        s->state |= STATE_MATCHING;
+                    } else {
+                        s->state &= (~STATE_MATCHING);
+                    }
+                } else {
+                    // No peek; mark_end at post-indent so the token absorbs
+                    // the indent (original behavior).
+                    lexer->mark_end(lexer);
+                    note_line_content_start(s, lexer);
+                }
+                DEBUG_PRINT("set STATE_WAS_SOFT_LINE_BREAK\n");
+                EMIT_TOKEN(SOFT_LINE_ENDING);
+            }
+
+            s->matched = 0;
+            int match_line_return = match_line(s, lexer);
+            bool might_be_soft_break = match_line_return & 2;
+            // bool one_will_be_matched = match_line_return & 1;
+            bool all_will_be_matched = s->matched == s->open_blocks.size;
+            DEBUG_EXP("%d", match_line_return);
+            DEBUG_EXP("%d", (int) might_be_soft_break);
+            // DEBUG_EXP("%d", (int) all_will_be_matched);
+            DEBUG_EXP("%d", s->matched);
+            DEBUG_LOOKAHEAD;
+
+            // BLOCK_QUOTE.match (scanner.c:568) consumes `>` plus at most one
+            // optional space; any additional gutter alignment left on the
+            // continuation line stalls the second SOFT_LINE_ENDING gate below
+            // at its `second_lookahead > ' '` check (whitespace fails the
+            // test) and forces a paragraph-terminating LINE_ENDING. The
+            // inline `_attr_ws` rule cannot consume LINE_ENDING, so a
+            // multi-space `{...}` continuation inside a blockquote becomes a
+            // hard parse error (was Q-2-38). LIST_ITEM*.match consumes the
+            // full continuation indent intrinsically; FENCED_DIV.match does
+            // not advance at all (line 581-584). Only BLOCK_QUOTE.match can
+            // leave gutter whitespace behind, so this fixup is gated on
+            // the matched stack actually containing a BLOCK_QUOTE.
+            // Additional gates:
+            // - `all_will_be_matched`: skip partial nested-blockquote
+            //   matches (lazy continuation of outer only).
+            // - `might_be_soft_break`: skip ATX-inside contexts.
+            bool any_blockquote_matched = false;
+            for (uint8_t i = 0; i < s->matched; i++) {
+                if (s->open_blocks.items[i] == BLOCK_QUOTE) {
+                    any_blockquote_matched = true;
+                    break;
+                }
+            }
+            if (any_blockquote_matched && all_will_be_matched && might_be_soft_break) {
+                while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                    advance(s, lexer);
+                }
+            }
+
+            if (all_will_be_matched) {
+                if (valid_symbols[PIPE_TABLE_LINE_ENDING]) {
+                    EMIT_TOKEN(PIPE_TABLE_LINE_ENDING);
+                }
+            }
+            // allow these characters to interrupt blocks.
+            // bd-af1e / bd-1xph: same backtick + asterisk rules as first
+            // gate, but at the post-match_line position (after block
+            // prefixes like `> `). The first peek already consumed the
+            // leading delimiters if first_lookahead was '`' or '*' — the
+            // first gate would have returned earlier in the soft-break
+            // case, so reaching here means the first peek determined the
+            // line opens a block.
+            int32_t second_lookahead;
+            bool second_starts_with_fence;
+            bool second_starts_with_star_block;
+            bool second_starts_with_marker_block;
+            // Mirrors first_starts_with_colon_block; see gate 1.
+            bool second_starts_with_colon_block;
+            // True when a peek (here or in the first gate) advanced the lexer
+            // past the line's opening run. Gates the mark_end below.
+            bool second_peeked;
+            if (first_peeked) {
+                second_lookahead = first_lookahead;
+                second_starts_with_fence = first_starts_with_fence;
+                second_starts_with_star_block = first_starts_with_star_block;
+                // Gate 2's question: does the marker interrupt this
+                // paragraph? The character shape must say yes AND the
+                // marker must sit within 3 columns of the innermost
+                // matched block's content column — after match_line,
+                // s->indentation holds exactly that residual.
+                second_starts_with_marker_block =
+                    first_marker_interrupts && s->indentation <= 3;
+                second_starts_with_colon_block = first_starts_with_colon_block;
+                second_peeked = true;
+            } else {
+                second_lookahead = lexer->lookahead;
+                second_starts_with_fence = false;
+                second_starts_with_star_block = false;
+                second_starts_with_marker_block = false;
+                // Nothing peeked past a colon run on this path (match_line
+                // only consumes block prefixes like `> `), so the lookahead
+                // still shows the line's first content character.
+                second_starts_with_colon_block = (second_lookahead == ':');
+                second_peeked = false;
+                if (lexer->lookahead == '`') {
+                    int level = 0;
+                    while (lexer->lookahead == '`' && level < 3) {
+                        advance(s, lexer);
+                        level++;
+                    }
+                    second_starts_with_fence = (level >= 3);
+                    second_peeked = true;
+                } else if (lexer->lookahead == '-' || lexer->lookahead == '+') {
+                    // bd-w6tod0gh: same peek as the first gate, at the
+                    // post-match_line position (after block prefixes like
+                    // `> `), where s->indentation is the residual indent.
+                    // A marker more than 3 residual columns in cannot
+                    // form (CommonMark) — leave the verdict false, but
+                    // keep the PEEKED emission path (second_peeked =
+                    // true) for the same fork-viability reason as the
+                    // first gate: the residue must stay outside the
+                    // SOFT_LINE_ENDING token.
+                    if (s->indentation <= 3) {
+                        second_starts_with_marker_block =
+                            peek_dash_plus_opens_block(s, lexer);
+                    }
+                    second_peeked = true;
+                } else if (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
+                    // Same residual-indent rule and emission-path rule
+                    // as the dash/plus branch.
+                    if (s->indentation <= 3) {
+                        second_starts_with_marker_block =
+                            peek_ordered_marker(s, lexer).may_interrupt;
+                    }
+                    second_peeked = true;
+                } else if (lexer->lookahead == '[') {
+                    // bd-miif1k1z: same peek as the first gate, at the
+                    // post-match_line position where s->indentation is
+                    // the residual indent. See the first gate for why a
+                    // footnote definition interrupts a paragraph at all,
+                    // and for the deliberate pandoc divergence.
+                    //
+                    // second_peeked inside the guard, for the same reason
+                    // as the first gate.
+                    if (s->indentation <= 3) {
+                        second_starts_with_marker_block =
+                            peek_ref_id_specifier(s, lexer);
+                        second_peeked = true;
+                    }
+                } else if (lexer->lookahead == '*') {
+                    int level = 0;
+                    while (lexer->lookahead == '*') {
+                        advance(s, lexer);
+                        level++;
+                    }
+                    bool trailing_ws_or_eol = (lexer->lookahead == ' ' ||
+                                               lexer->lookahead == '\t' ||
+                                               lexer->lookahead == '\n' ||
+                                               lexer->lookahead == '\r' ||
+                                               lexer->eof(lexer));
+                    // bd-star-as-str-qigl02pz: a `*` alone on the line (EOL/EOF right
+                    // after it) is an EMPTY list item. CommonMark lets it start a sibling
+                    // item inside an open list, but not interrupt a top-level paragraph:
+                    // there the line is a continuation and the star lexes as a literal
+                    // Str (`para\n*` = Para [para, SoftBreak, "*"]).
+                    bool trailing_ws = lexer->lookahead == ' ' || lexer->lookahead == '\t';
+                    if (level == 1 && (trailing_ws || (trailing_ws_or_eol && any_list_item_open(s)))) {
+                        second_starts_with_star_block = true;
+                    } else if (level >= 3 && trailing_ws_or_eol) {
+                        second_starts_with_star_block = true;
+                    }
+                    second_peeked = true;
+                }
+            }
+
+            // bd-ilv8p: same inside-code-span bypass as the first gate
+            // above. Inside an open inline code span, the block-marker
+            // checks (#, -, +, etc.) should not gate SOFT_LINE_ENDING —
+            // pandoc treats those as content, and the matching close is
+            // guaranteed to exist within the paragraph by the look-ahead
+            // at CODE_SPAN_START time.
+            if (valid_symbols[SOFT_LINE_ENDING] && might_be_soft_break && all_will_be_matched &&
+                ((s->code_span_delimiter_length > 0) ||
+                 ((second_lookahead != '*' || !second_starts_with_star_block) &&
+                  !second_starts_with_marker_block &&
+                  second_lookahead != '>' &&
+                  !second_starts_with_colon_block && second_lookahead != '#' &&
+                  !second_starts_with_fence &&
+                  second_lookahead > ' '))) {
+                s->indentation = 0;
+                s->column = 0;
+                // If the last line break ended a paragraph and no new block opened,
+                // the last line break should have been a soft line break Reset the
+                // counter for matched blocks
+                s->matched = 0;
+                // If there is at least one open block, go to matching mode.
+                if (s->open_blocks.size > 0) {
+                    DEBUG_PRINT("set STATE_MATCHING\n");
+                    s->state |= STATE_MATCHING;
+                } else {
+                    DEBUG_PRINT("reset STATE_MATCHING\n");
+                    s->state &= (~STATE_MATCHING);
+                }
+                DEBUG_PRINT("set STATE_WAS_SOFT_LINE_BREAK\n");
+                s->state |= STATE_WAS_SOFT_LINE_BREAK;
+                if (!second_peeked) {
+                    // No peek-advance; mark_end at current position
+                    // (original behavior). When a peek DID advance, marking
+                    // here would swallow the peeked run into the
+                    // SOFT_LINE_ENDING token's range; leave the range where
+                    // the earlier mark_end put it.
+                    lexer->mark_end(lexer);
+                    note_line_content_start(s, lexer);
+                }
+                EMIT_TOKEN(SOFT_LINE_ENDING);
+            }
+        }
+        if (valid_symbols[LINE_ENDING]) {
+            s->indentation = 0;
+            s->column = 0;
+            // If the last line break ended a paragraph and no new block opened,
+            // the last line break should have been a soft line break Reset the
+            // counter for matched blocks
+            s->matched = 0;
+            // If there is at least one open block, go to matching mode.
+            if (s->open_blocks.size > 0) {
+                DEBUG_PRINT("set STATE_MATCHING\n");
+                s->state |= STATE_MATCHING;
+            } else {
+                DEBUG_PRINT("reset STATE_MATCHING\n");
+                s->state &= (~STATE_MATCHING);
+            }
+            DEBUG_PRINT("reset STATE_WAS_SOFT_LINE_BREAK\n");
+            s->state &= (~STATE_WAS_SOFT_LINE_BREAK);
+            DEBUG_PRINT("reset STATE_INSIDE_ATX\n");
+            s->state &= (~STATE_INSIDE_ATX);
+            print_valid_symbols(valid_symbols);
+            EMIT_TOKEN(LINE_ENDING);
+        }
+    }
+    DEBUG_PRINT("Fell through external scanner => return false;\n");
+    return false;
+}
+
+void *tree_sitter_avenger_qmd_external_scanner_create(void) {
+    Scanner *s = (Scanner *)malloc(sizeof(Scanner));
+    s->open_blocks.items = (Block *)calloc(1, sizeof(Block));
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+    _Static_assert(ATX_H6_MARKER == ATX_H1_MARKER + 5, "");
+#else
+    assert(ATX_H6_MARKER == ATX_H1_MARKER + 5);
+#endif
+    deserialize(s, NULL, 0);
+
+    return s;
+}
+
+bool tree_sitter_avenger_qmd_external_scanner_scan(void *payload, TSLexer *lexer,
+                                                const bool *valid_symbols) {
+    Scanner *scanner = (Scanner *)payload;
+    scanner->simulate = false;
+    scanner->pending_line_content_column = 0;
+    bool found = scan(scanner, lexer, valid_symbols);
+    if (found) {
+        // Every emitted token replaces the anchor, so it only ever
+        // describes the position right after the token that set it.
+        scanner->line_content_column = scanner->pending_line_content_column;
+        // GH #943: keep the open single-quote count (see the field).
+        switch (lexer->result_symbol) {
+            case SINGLE_QUOTE_OPEN:
+                if (scanner->single_quote_depth < UINT8_MAX) {
+                    scanner->single_quote_depth++;
+                }
+                break;
+            case SINGLE_QUOTE_CLOSE:
+                if (scanner->single_quote_depth > 0) {
+                    scanner->single_quote_depth--;
+                }
+                break;
+            case LINE_ENDING:
+            case PIPE_TABLE_LINE_ENDING:
+            case BLOCK_CLOSE:
+            case TOKEN_EOF:
+                scanner->single_quote_depth = 0;
+                break;
+            default:
+                break;
+        }
+    }
+    return found;
+}
+
+unsigned tree_sitter_avenger_qmd_external_scanner_serialize(void *payload,
+                                                         char *buffer) {
+    Scanner *scanner = (Scanner *)payload;
+    return serialize(scanner, buffer);
+}
+
+void tree_sitter_avenger_qmd_external_scanner_deserialize(void *payload,
+                                                       const char *buffer,
+                                                       unsigned length) {
+    Scanner *scanner = (Scanner *)payload;
+    deserialize(scanner, buffer, length);
+}
+
+void tree_sitter_avenger_qmd_external_scanner_destroy(void *payload) {
+    Scanner *scanner = (Scanner *)payload;
+    free(scanner->open_blocks.items);
+    free(scanner);
+}

@@ -25,4 +25,12 @@ git diff --exit-code -- \
   datetime/src/tree_sitter/alloc.h \
   datetime/src/tree_sitter/array.h \
   datetime/src/tree_sitter/parser.h
+(cd qmd && tree-sitter generate)
+git diff --exit-code -- \
+  qmd/src/grammar.json \
+  qmd/src/node-types.json \
+  qmd/src/parser.c \
+  qmd/src/tree_sitter/alloc.h \
+  qmd/src/tree_sitter/array.h \
+  qmd/src/tree_sitter/parser.h
 node scripts/sync_queries.mjs --check
