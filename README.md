@@ -52,6 +52,19 @@ node scripts/sync_queries.mjs
 
 Each grammar has its own `tree-sitter.json`, because the Tree-sitter CLI's `test` doesn't keep two grammars of one configuration apart. The Rust binding exports them as `FORMAT_LANGUAGE` and `DATETIME_LANGUAGE`, with their node types and highlights queries, and an editor builds each from its directory, as Zed's `path` of a grammar does.
 
+## The Quarto Markdown grammar
+
+`qmd/` holds a copy of Quarto 2's Tree-sitter grammar of Quarto Markdown, from `crates/tree-sitter-qmd` of [quarto-dev/q2](https://github.com/quarto-dev/q2), the parser that q2 renders documents with, under the name `avenger_qmd`. It reads Quarto's syntax that Markdown's grammars leave as text: divs, attributes, code cells' languages, raw blocks, shortcodes, citations, math, spans, and notes. q2 names it `markdown`, the name of a grammar that Zed builds in, and Zed refuses an extension's grammar of a built-in grammar's name, so the copy renames the grammar and its external scanner's functions and generates its parser again from the renamed `grammar.js`. `qmd/package.json` makes `qmd/` CommonJS, as q2's grammar is written. The grammar has no queries here: an editor writes its own against the node types, and `qmd/` is out of the Rust binding and the npm package, since only editors build it, from its directory.
+
+`qmd/UPSTREAM` records q2's commit and the sha256 of each file that the copy takes. To follow q2, check out its `crates/tree-sitter-qmd` at a commit and run the script, which fails when a rename no longer matches what it expects; CI checks that `qmd/` is what q2's commit produces:
+
+```sh
+node scripts/sync_qmd.mjs --q2-root ../q2
+node scripts/sync_qmd.mjs --q2-root ../q2 --check
+```
+
+q2's `LICENSE` is in `qmd/`, with the notice of tree-sitter-markdown, from which q2's grammar derives.
+
 ## Development
 
 Tree-sitter CLI 0.27.2 is pinned in `package-lock.json`.
@@ -66,7 +79,7 @@ npm run measure -- --check
 npm run build:wasm
 ```
 
-`npm test` runs the corpus in `test/corpus/` and those of the format and datetime grammars in `format/test/corpus/` and `datetime/test/corpus/`, including `recovery.txt`, which records how the parser recovers from the unfinished text of typing, and the highlight fixtures in `test/highlight/`, whose assertion comments, such as `-- ^ keyword`, give the capture under the caret. `npm run test:scanner` runs the scanner under the address and undefined-behavior sanitizers. `npm run measure -- --write` records the parser's size in `test/metrics/current.json`, which CI compares.
+`npm test` runs the corpus in `test/corpus/` and those of the format, datetime, and Quarto Markdown grammars in `format/test/corpus/`, `datetime/test/corpus/`, and `qmd/test/corpus/`, the last q2's own, including `recovery.txt`, which records how the parser recovers from the unfinished text of typing, and the highlight fixtures in `test/highlight/`, whose assertion comments, such as `-- ^ keyword`, give the capture under the caret. `npm run test:scanner` runs the scanner under the address and undefined-behavior sanitizers. `npm run measure -- --write` records the parser's size in `test/metrics/current.json`, which CI compares. `npm run build:wasm` builds each grammar's wasm into `target/`.
 
 Rust:
 

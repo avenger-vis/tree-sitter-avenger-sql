@@ -63,6 +63,30 @@ jobs:
       - working-directory: tree-sitter-avenger-sql
         run: node scripts/sync_injections.mjs --avenger-root ../avenger --check
 
+  qmd-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: tree-sitter-avenger-sql
+      - id: upstream
+        run: echo "commit=$(head -n 1 tree-sitter-avenger-sql/qmd/UPSTREAM | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: quarto-dev/q2
+          ref: ${{ steps.upstream.outputs.commit }}
+          path: q2
+          sparse-checkout: crates/tree-sitter-qmd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tree-sitter-avenger-sql/package-lock.json
+      - working-directory: tree-sitter-avenger-sql
+        run: npm ci
+      - working-directory: tree-sitter-avenger-sql
+        run: node scripts/sync_qmd.mjs --q2-root ../q2 --check
+
   rust:
     strategy:
       fail-fast: false
