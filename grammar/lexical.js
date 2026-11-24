@@ -38,8 +38,8 @@ export default {
       ),
     ),
 
-  // `--|` to the end of the line: a doc comment, which documents the definition after it, or at
-  // the top of a `.qmd` cell, a cell option. It wins over `comment` by its precedence.
+  // `--|` to the end of the line: a doc comment, which documents the definition after it. It wins
+  // over `comment` by its precedence. A Quarto cell's options are `#|` lines, which are comments.
   doc_comment: _ => token(prec(1, seq("--|", /[^\r\n]*/))),
 
   // A hint, `@{...}` or `@` and digits, which avenger-sql reports as unsupported.
