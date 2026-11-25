@@ -54,14 +54,16 @@ export default {
   // `IMPORT MODULE path [AS alias] [OPTIONS (...)]`
   import_stmt: $ => stmt(kw("IMPORT"), kw("MODULE"), $.path, optional($.alias), optional($.options)),
 
-  // `DECLARE names [type] [DEFAULT value]`. The names take no trailing comma, since a type can
-  // follow them.
+  // `DECLARE names [type] [OPTIONS (...)] [DEFAULT value]`. The names take no trailing comma,
+  // since a type can follow them. After the names, `OPTIONS` is the keyword, not a type's name,
+  // because Tree-sitter lexes a keyword wherever it is valid.
   declare_stmt: $ =>
     stmt(
       kw("DECLARE"),
       field("name", $.name),
       repeat(seq(",", field("name", $.name))),
       optional($._type),
+      optional($.options),
       optional(seq(kw("DEFAULT"), $._expr)),
     ),
 
