@@ -2,12 +2,12 @@
   "grammar": "avenger_sql",
   "tree_sitter_cli": "0.27.2",
   "abi_version": 15,
-  "state_count": 4570,
-  "large_state_count": 695,
+  "state_count": 4580,
+  "large_state_count": 698,
   "symbol_count": 468,
   "token_count": 218,
   "field_count": 23,
-  "parser_bytes": 7135947,
-  "grammar_json_bytes": 336932,
-  "node_types_bytes": 80451
+  "parser_bytes": 7155038,
+  "grammar_json_bytes": 337191,
+  "node_types_bytes": 80525
 }

@@ -156,6 +156,10 @@ DECLARE
 
 DECLARE lo, hi INT64 DEFAULT 0;
 DECLARE k DEFAULT 2;
+DECLARE brush SELECTION;
+DECLARE picks SELECTION OPTIONS (resolution = 'union');
+DECLARE b SELECTION OPTIONS (resolution = 'union') DEFAULT 1;
+DECLARE n OPTIONS (resolution = 'union');
 DECLARE d DATE
 
 ---
@@ -177,6 +181,50 @@ DECLARE d DATE
         (identifier))
       (literal
         (integer)))
+    (declare_stmt
+      name: (name
+        (identifier))
+      (named_type
+        (name_ref
+          (identifier))))
+    (declare_stmt
+      name: (name
+        (identifier))
+      (named_type
+        (name_ref
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))))
+    (declare_stmt
+      name: (name
+        (identifier))
+      (named_type
+        (name_ref
+          (identifier)))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content)))))
+      (literal
+        (integer)))
+    (declare_stmt
+      name: (name
+        (identifier))
+      (options
+        (option_entry
+          (name
+            (identifier))
+          (literal
+            (string
+              (string_content))))))
     (declare_stmt
       name: (name
         (identifier))
